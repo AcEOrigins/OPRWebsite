@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPR Fargo - Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <div class="portal-container">
+        <!-- Side Navigation -->
+        <nav class="side-nav">
+            <div class="nav-header">
+                <img src="assets/OPRLOGO-nobg.png" alt="OPR Logo" class="nav-logo">
+                <h2>OPR Portal</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" class="nav-item active" data-tab="manage-content">
+                    <i class="fas fa-edit nav-icon"></i>
+                    <span class="nav-text">Manage Site</span>
+                </a></li>
+                <li><a href="#" class="nav-item" data-tab="battlemetrics">
+                    <i class="fas fa-chart-line nav-icon"></i>
+                    <span class="nav-text">BattleMetrics</span>
+                </a></li>
+            </ul>
+            <div class="nav-footer">
+                <a href="index.html" class="back-link">← Back to Site</a>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1 id="page-title">Manage Site</h1>
+            </div>
+
+            <!-- Sub-tabs Navigation -->
+            <div class="sub-tabs-nav" id="sub-tabs-nav" style="display: none;">
+                <div class="sub-tabs-container">
+                    <!-- Sub-tabs will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div class="tab-content" id="dashboard">
+            </div>
+
+            <!-- Server Control Tab -->
+            <div class="tab-content" id="server-control">
+            </div>
+
+            <!-- Manage Site Content Tab -->
+            <div class="tab-content active" id="manage-content">
+                <!-- Sub-tab contents for Manage Site -->
+                <div class="sub-tab-content active" data-sub-tab="slideshow">
+                </div>
+                <div class="sub-tab-content" data-sub-tab="server-info">
+                </div>
+                <div class="sub-tab-content" data-sub-tab="our-servers">
+                </div>
+                <div class="sub-tab-content" data-sub-tab="footer">
+                </div>
+                <div class="sub-tab-content" data-sub-tab="navigation">
+                </div>
+            </div>
+
+            <!-- Players Tab -->
+            <div class="tab-content" id="players">
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings">
+            </div>
+
+            <!-- Logs Tab -->
+            <div class="tab-content" id="logs">
+            </div>
+
+            <!-- BattleMetrics Tab -->
+            <div class="tab-content" id="battlemetrics">
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Add Server Button -->
+    <button class="add-server-btn" id="add-server-btn" style="display: none;">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Add Server Modal -->
+    <div class="modal-overlay" id="add-server-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Server</h2>
+                <button class="modal-close" id="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="add-server-form">
+                    <div class="form-group">
+                        <label for="server-name">Server Name</label>
+                        <input type="text" id="server-name" class="form-input" placeholder="Enter server name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="battlemetrics-id">BattleMetrics ID</label>
+                        <input type="text" id="battlemetrics-id" class="form-input" placeholder="Enter BattleMetrics server ID" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" id="cancel-add-server">Cancel</button>
+                        <button type="submit" class="btn-primary">Add Server</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/portal.js"></script>
+</body>
+</html>
+
