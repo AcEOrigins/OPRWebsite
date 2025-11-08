@@ -272,6 +272,179 @@ body {
     margin-top: 2rem;
 }
 
+.bm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.bm-empty-state {
+    color: #cccccc;
+    text-align: center;
+}
+
+.bm-card {
+    background: linear-gradient(180deg, #2b4f58 0%, #253b40 100%);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    color: #ffffff;
+    position: relative;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bm-status-line {
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    margin-bottom: 1rem;
+    transition: background 0.3s ease;
+}
+
+.bm-status-line.online {
+    background: #3ddc84;
+}
+
+.bm-status-line.offline {
+    background: #e05959;
+}
+
+.bm-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.bm-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.bm-status {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #d5dfe3;
+    font-size: 0.9rem;
+}
+
+.bm-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #88959b;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+}
+
+.bm-status-dot.online {
+    background: #36d67a;
+    box-shadow: 0 0 12px rgba(54, 214, 122, 0.6);
+}
+
+.bm-status-dot.offline {
+    background: #f06969;
+    box-shadow: 0 0 12px rgba(240, 105, 105, 0.5);
+}
+
+.bm-players-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.bm-info-card {
+    flex: 1;
+    background: rgba(11, 24, 27, 0.6);
+    border-radius: 10px;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+}
+
+.bm-info-card.square {
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.bm-info-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    color: #9fb1b8;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+}
+
+.bm-info-value {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.bm-meta-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.bm-uptime-card {
+    display: flex;
+    margin-bottom: 1.5rem;
+}
+
+.bm-uptime-card .bm-info-card {
+    flex: 0 0 140px;
+    margin: 0 auto;
+}
+
+.bm-ip-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: rgba(11, 24, 27, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+}
+
+.bm-ip-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.bm-ip-address {
+    font-family: 'Courier New', monospace;
+    color: #d7ecf3;
+    font-size: 1rem;
+}
+
+.bm-copy-btn {
+    background: #3a7b8a;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.bm-copy-btn:hover {
+    background: #2f636f;
+    transform: translateY(-1px);
+}
+
+.bm-copy-btn:active {
+    transform: translateY(0);
+}
+
 .server-card-frontend {
     background-color: #1a1a1a;
     padding: 2rem;

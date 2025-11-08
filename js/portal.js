@@ -236,29 +236,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Function to render server info cards in portal
     function renderServerInfo() {
-        const serverInfoTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="server-info"]');
-        if (!serverInfoTab) return;
+        const serverInfoContainer = document.getElementById('portal-battlemetrics-grid');
+        if (!serverInfoContainer || !window.Battlemetrics) return;
 
         const servers = JSON.parse(localStorage.getItem('servers') || '[]');
-        
-        if (servers.length === 0) {
-            serverInfoTab.innerHTML = '<p style="color: #cccccc;">No server information available.</p>';
-            return;
-        }
-
-        let html = '<div class="server-info-cards">';
-        servers.forEach(server => {
-            html += `
-                <div class="server-info-card">
-                    <h3>${server.name || 'Untitled Server'}</h3>
-                    <div class="server-info-details">
-                        <p class="server-platforms">Available on: XBOX, PLAYSTATION, PC</p>
-                    </div>
-                </div>
-            `;
-        });
-        html += '</div>';
-        serverInfoTab.innerHTML = html;
+        Battlemetrics.renderCards(serverInfoContainer, servers);
     }
 
     // Initial render

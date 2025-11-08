@@ -60,24 +60,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display servers on frontend
     function renderServers() {
         const serversDisplay = document.getElementById('servers-display');
-        if (!serversDisplay) return;
+        if (!serversDisplay || !window.Battlemetrics) return;
 
         const servers = JSON.parse(localStorage.getItem('servers') || '[]');
-        
-        if (servers.length === 0) {
-            serversDisplay.innerHTML = '<p style="color: #cccccc; text-align: center; grid-column: 1 / -1;">No servers available at this time.</p>';
-            return;
-        }
-
-        let html = '';
-        servers.forEach(server => {
-            html += `
-                <div class="server-card-frontend">
-                    <h3>${server.name || 'Untitled Server'}</h3>
-                </div>
-            `;
-        });
-        serversDisplay.innerHTML = html;
+        Battlemetrics.renderCards(serversDisplay, servers);
     }
 
     function renderServerInfo() {
