@@ -16,20 +16,26 @@
                 <h2>OPR Portal</h2>
             </div>
             <ul class="nav-menu">
-                <li><a href="#" class="nav-item active" data-tab="manage-content">
-                    <i class="fas fa-edit nav-icon"></i>
-                    <span class="nav-text">Manage Site</span>
-                </a></li>
-                <li><a href="#" class="nav-item" data-tab="manage-access">
-                    <i class="fas fa-user-shield nav-icon"></i>
-                    <span class="nav-text">Manage Access</span>
-                </a></li>
-                <li><a href="#" class="nav-item" data-tab="battlemetrics">
-                    <i class="fas fa-chart-line nav-icon"></i>
-                    <span class="nav-text">BattleMetrics</span>
-                </a></li>
+                <li class="nav-item-wrapper">
+                    <a href="#" class="nav-item active" data-tab="manage-content">
+                        <i class="fas fa-edit nav-icon"></i>
+                        <span class="nav-text">Manage Site</span>
+                    </a>
+                    <ul class="sub-nav" data-parent-tab="manage-content"></ul>
+                </li>
+                <li class="nav-item-wrapper">
+                    <a href="#" class="nav-item" data-tab="battlemetrics">
+                        <i class="fas fa-chart-line nav-icon"></i>
+                        <span class="nav-text">BattleMetrics</span>
+                    </a>
+                    <ul class="sub-nav" data-parent-tab="battlemetrics"></ul>
+                </li>
             </ul>
             <div class="nav-footer">
+                <a href="#" class="nav-item" data-tab="manage-access">
+                    <i class="fas fa-user-shield nav-icon"></i>
+                    <span class="nav-text">Manage Access</span>
+                </a>
                 <a href="index.html" class="back-link">← Back to Site</a>
             </div>
         </nav>
@@ -38,13 +44,6 @@
         <main class="main-content">
             <div class="content-header">
                 <h1 id="page-title">Manage Site</h1>
-            </div>
-
-            <!-- Sub-tabs Navigation -->
-            <div class="sub-tabs-nav" id="sub-tabs-nav" style="display: none;">
-                <div class="sub-tabs-container">
-                    <!-- Sub-tabs will be dynamically inserted here -->
-                </div>
             </div>
 
             <!-- Dashboard Tab -->
@@ -141,13 +140,10 @@
             <div class="modal-body">
                 <form id="add-server-form">
                     <div class="form-group">
-                        <label for="server-name">Server Name</label>
-                        <input type="text" id="server-name" class="form-input" placeholder="Enter server name" required>
-                    </div>
-                    <div class="form-group">
                         <label for="battlemetrics-id">BattleMetrics ID</label>
                         <input type="text" id="battlemetrics-id" class="form-input" placeholder="Enter BattleMetrics server ID" required>
                     </div>
+                    <p class="form-error" id="add-server-error" role="alert" aria-live="assertive"></p>
                     <div class="modal-actions">
                         <button type="button" class="btn-secondary" id="cancel-add-server">Cancel</button>
                         <button type="submit" class="btn-primary">Add Server</button>

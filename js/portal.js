@@ -1,12 +1,21 @@
 // Portal Navigation Functionality
 document.addEventListener('DOMContentLoaded', function() {
-    const navItems = document.querySelectorAll('.nav-item');
+    const navItems = Array.from(document.querySelectorAll('.nav-item[data-tab]'));
+    const navItemWrappers = Array.from(document.querySelectorAll('.nav-item-wrapper'));
     const tabContents = document.querySelectorAll('.tab-content');
     const pageTitle = document.getElementById('page-title');
-    const subTabsNav = document.getElementById('sub-tabs-nav');
-    const subTabsContainer = subTabsNav.querySelector('.sub-tabs-container');
+    const serverInfoContainer = document.getElementById('portal-battlemetrics-grid');
+    const ourServersTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
+    const addServerError = document.getElementById('add-server-error');
 
-    // Tab titles mapping
+    const API_ENDPOINTS = {
+        list: 'Api/php/getServers.php',
+        add: 'Api/php/saveServer.php',
+        remove: 'Api/php/deleteServer.php'
+    };
+
+    let serversCache = [];
+
     const tabTitles = {
         'dashboard': 'Dashboard',
         'server-control': 'Server Control',
@@ -18,7 +27,6 @@ document.addEventListener('DOMContentLoaded', function() {
         'battlemetrics': 'BattleMetrics'
     };
 
-    // Sub-tabs configuration for each main tab
     const subTabsConfig = {
         'manage-content': [
             { id: 'slideshow', label: 'Slideshow' },
@@ -27,109 +35,155 @@ document.addEventListener('DOMContentLoaded', function() {
             { id: 'footer', label: 'Footer' },
             { id: 'navigation', label: 'Navigation' }
         ]
-        // Add more tabs with sub-tabs here as needed
-        // 'dashboard': [
-        //     { id: 'overview', label: 'Overview' },
-        //     { id: 'analytics', label: 'Analytics' }
-        // ]
     };
 
-    // Function to render sub-tabs
-    function renderSubTabs(tabId) {
-        const subTabs = subTabsConfig[tabId];
-        
-        if (subTabs && subTabs.length > 0) {
-            subTabsContainer.innerHTML = '';
-            subTabs.forEach((subTab, index) => {
-                const btn = document.createElement('button');
-                btn.className = `sub-tab-btn ${index === 0 ? 'active' : ''}`;
-                btn.textContent = subTab.label;
-                btn.setAttribute('data-sub-tab', subTab.id);
-                btn.addEventListener('click', () => switchSubTab(tabId, subTab.id));
-                subTabsContainer.appendChild(btn);
-            });
-            subTabsNav.style.display = 'block';
-            // Activate first sub-tab
-            switchSubTab(tabId, subTabs[0].id);
-        } else {
-            subTabsNav.style.display = 'none';
+    buildSubNavigation();
+
+    navItems.forEach(item => {
+        item.addEventListener('click', (event) => {
+            event.preventDefault();
+            const tabName = item.dataset.tab;
+            if (!tabName) {
+                return;
+            }
+
+            const wrapper = getNavWrapper(tabName);
+            const subNav = wrapper ? wrapper.querySelector('.sub-nav') : null;
+            const hasSubNav = subNav && subNav.children.length > 0;
+
+            if (hasSubNav) {
+                const isExpanded = wrapper.classList.contains('expanded');
+                if (isExpanded) {
+                    wrapper.classList.remove('expanded');
+                    return;
+                }
+
+                setWrapperExpansion(tabName, true);
+                setActiveMainTab(tabName, { skipWrapperSync: true });
+                return;
+            }
+
+            navItemWrappers.forEach(w => w.classList.remove('expanded'));
+            setActiveMainTab(tabName);
+        });
+    });
+
+    const initialNavItem = document.querySelector('.nav-item.active[data-tab]') || navItems[0];
+    if (initialNavItem) {
+        const initialTab = initialNavItem.dataset.tab;
+        if (initialTab) {
+            if (getDefaultSubTab(initialTab)) {
+                setWrapperExpansion(initialTab, true);
+                setActiveMainTab(initialTab, { skipWrapperSync: true });
+            } else {
+                setActiveMainTab(initialTab);
+            }
         }
     }
 
-    // Function to switch sub-tabs
-    function switchSubTab(mainTabId, subTabId) {
-        const mainTab = document.getElementById(mainTabId);
-        if (!mainTab) return;
+    function buildSubNavigation() {
+        Object.entries(subTabsConfig).forEach(([tabId, subTabs]) => {
+            const subNav = document.querySelector(`.sub-nav[data-parent-tab="${tabId}"]`);
+            if (!subNav) {
+                return;
+            }
 
-        // Remove active class from all sub-tab buttons
-        subTabsContainer.querySelectorAll('.sub-tab-btn').forEach(btn => {
-            btn.classList.remove('active');
+            subNav.innerHTML = '';
+
+            subTabs.forEach((subTab) => {
+                const listItem = document.createElement('li');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'sub-nav-item';
+                button.textContent = subTab.label;
+                button.dataset.parentTab = tabId;
+                button.dataset.subTab = subTab.id;
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    setActiveMainTab(tabId, { preserveSubTab: true });
+                    switchSubTab(tabId, subTab.id);
+                });
+                listItem.appendChild(button);
+                subNav.appendChild(listItem);
+            });
+        });
+    }
+
+    function setActiveMainTab(tabId, options = {}) {
+        const { preserveSubTab = false, skipSubTabActivation = false, skipWrapperSync = false } = options;
+
+        navItems.forEach(item => {
+            item.classList.toggle('active', item.dataset.tab === tabId);
         });
 
-        // Remove active class from all sub-tab contents
+        tabContents.forEach(content => {
+            content.classList.toggle('active', content.id === tabId);
+        });
+
+        if (pageTitle && tabTitles[tabId]) {
+            pageTitle.textContent = tabTitles[tabId];
+        }
+
+        if (!skipWrapperSync) {
+            const hasDefaultSub = Boolean(getDefaultSubTab(tabId));
+            setWrapperExpansion(tabId, hasDefaultSub);
+        }
+
+        if (!preserveSubTab && !skipSubTabActivation) {
+            const defaultSubTab = getDefaultSubTab(tabId);
+            if (defaultSubTab) {
+                switchSubTab(tabId, defaultSubTab);
+            } else {
+                updateAddServerButton(tabId, null);
+            }
+        } else if (skipSubTabActivation) {
+            updateAddServerButton(tabId, null);
+        }
+    }
+
+    function getDefaultSubTab(tabId) {
+        const subTabs = subTabsConfig[tabId];
+        return subTabs && subTabs.length > 0 ? subTabs[0].id : null;
+    }
+
+    function switchSubTab(mainTabId, subTabId) {
+        const mainTab = document.getElementById(mainTabId);
+        if (!mainTab) {
+            return;
+        }
+
+        setWrapperExpansion(mainTabId, true);
+
         mainTab.querySelectorAll('.sub-tab-content').forEach(content => {
             content.classList.remove('active');
         });
 
-        // Add active class to clicked sub-tab button
-        const activeBtn = subTabsContainer.querySelector(`[data-sub-tab="${subTabId}"]`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
-        }
-
-        // Add active class to corresponding sub-tab content
         const activeContent = mainTab.querySelector(`[data-sub-tab="${subTabId}"]`);
         if (activeContent) {
             activeContent.classList.add('active');
         }
 
-        // Show/hide add server button based on sub-tab
-        const addServerBtn = document.getElementById('add-server-btn');
-        if (addServerBtn) {
-            if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
-                addServerBtn.style.display = 'flex';
-            } else {
-                addServerBtn.style.display = 'none';
-            }
+        const subNav = document.querySelector(`.sub-nav[data-parent-tab="${mainTabId}"]`);
+        if (subNav) {
+            subNav.querySelectorAll('.sub-nav-item').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.subTab === subTabId);
+            });
         }
+
+        updateAddServerButton(mainTabId, subTabId);
     }
 
-    // Handle navigation clicks
-    navItems.forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            // Remove active class from all nav items and tabs
-            navItems.forEach(nav => nav.classList.remove('active'));
-            tabContents.forEach(tab => tab.classList.remove('active'));
-            
-            // Add active class to clicked nav item
-            this.classList.add('active');
-            
-            // Get the tab to show
-            const tabName = this.getAttribute('data-tab');
-            const targetTab = document.getElementById(tabName);
-            
-            // Show the target tab
-            if (targetTab) {
-                targetTab.classList.add('active');
-                
-                // Update page title
-                if (pageTitle && tabTitles[tabName]) {
-                    pageTitle.textContent = tabTitles[tabName];
-                }
+    function updateAddServerButton(mainTabId, subTabId) {
+        const addServerBtn = document.getElementById('add-server-btn');
+        if (!addServerBtn) {
+            return;
+        }
 
-                // Render sub-tabs if they exist
-                renderSubTabs(tabName);
-            }
-        });
-    });
-
-    // Initialize sub-tabs for the active tab on page load
-    const activeNavItem = document.querySelector('.nav-item.active');
-    if (activeNavItem) {
-        const activeTabId = activeNavItem.getAttribute('data-tab');
-        renderSubTabs(activeTabId);
+        if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
+            addServerBtn.style.display = 'flex';
+        } else {
+            addServerBtn.style.display = 'none';
+        }
     }
 
     // Modal functionality
@@ -149,7 +203,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Close modal
     function closeModal() {
         addServerModal.classList.remove('active');
-        addServerForm.reset();
+        if (addServerForm) {
+            addServerForm.reset();
+        }
+        setAddServerError('');
     }
 
     if (closeModalBtn) {
@@ -171,87 +228,247 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle form submission
     if (addServerForm) {
-        addServerForm.addEventListener('submit', (e) => {
+        addServerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const serverData = {
-                id: Date.now(),
-                name: document.getElementById('server-name').value,
-                battlemetricsId: document.getElementById('battlemetrics-id').value
-            };
 
-            // Get existing servers from localStorage
-            let servers = JSON.parse(localStorage.getItem('servers') || '[]');
-            servers.push(serverData);
-            localStorage.setItem('servers', JSON.stringify(servers));
+            const battlemetricsIdInput = document.getElementById('battlemetrics-id');
+            const battlemetricsId = battlemetricsIdInput ? battlemetricsIdInput.value.trim() : '';
 
-            // Close modal and refresh display
-            closeModal();
-            
-            // Refresh the servers list in portal
-            renderServersList();
-            
-            // Trigger custom event to update frontend
-            window.dispatchEvent(new CustomEvent('serversUpdated'));
+            if (!battlemetricsId) {
+                setAddServerError('BattleMetrics ID is required.');
+                if (battlemetricsIdInput) {
+                    battlemetricsIdInput.focus();
+                }
+                return;
+            }
+
+            setAddServerError('');
+            toggleAddServerForm(true);
+
+            try {
+                await addServer(battlemetricsId);
+                closeModal();
+                await loadServers();
+            } catch (error) {
+                console.error('Failed to add server:', error);
+                setAddServerError(error.message || 'Unable to add server right now.');
+            } finally {
+                toggleAddServerForm(false);
+            }
         });
     }
 
-    // Function to render servers list in portal
-    function renderServersList() {
-        const ourServersTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
-        if (!ourServersTab) return;
+    async function loadServers() {
+        if (!serverInfoContainer) {
+            return;
+        }
 
-        const servers = JSON.parse(localStorage.getItem('servers') || '[]');
-        
-        if (servers.length === 0) {
-            ourServersTab.innerHTML = '<p style="color: #cccccc;">Our Servers</p>';
+        setServerInfoMessage('Loading servers...');
+
+        try {
+            const response = await fetch(API_ENDPOINTS.list, {
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (!Array.isArray(data)) {
+                throw new Error('Unexpected response format');
+            }
+
+            serversCache = data;
+            renderServersList(serversCache);
+
+            if (serversCache.length === 0) {
+                setServerInfoMessage('No servers configured yet.');
+            } else {
+                renderServerCards(serversCache);
+            }
+        } catch (error) {
+            console.error('Failed to load servers:', error);
+            renderServersList([]);
+            setServerInfoMessage('Unable to load servers. Please try again later.');
+        }
+    }
+
+    function renderServersList(servers) {
+        if (!ourServersTab) {
+            return;
+        }
+
+        if (!Array.isArray(servers) || servers.length === 0) {
+            ourServersTab.innerHTML = '<p style="color: #cccccc;">No servers have been added yet.</p>';
             return;
         }
 
         let html = '<div class="servers-list">';
         servers.forEach(server => {
+            const displayName = escapeHtml(server.display_name || server.displayName || 'Unknown Server');
+            const battlemetricsId = escapeHtml(server.battlemetrics_id || server.battlemetricsId || 'N/A');
+            const serverId = Number(server.id) || 0;
+
             html += `
                 <div class="server-card">
-                    <h3>${server.name || 'Untitled Server'}</h3>
-                    <p><strong>BattleMetrics ID:</strong> ${server.battlemetricsId || 'N/A'}</p>
-                    <button class="btn-danger delete-server" data-id="${server.id}">Delete</button>
+                    <h3>${displayName}</h3>
+                    <p><strong>BattleMetrics ID:</strong> ${battlemetricsId}</p>
+                    <button class="btn-danger delete-server" data-id="${serverId}">Delete</button>
                 </div>
             `;
         });
         html += '</div>';
         ourServersTab.innerHTML = html;
 
-        // Add delete functionality
         ourServersTab.querySelectorAll('.delete-server').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const serverId = parseInt(this.getAttribute('data-id'));
-                let servers = JSON.parse(localStorage.getItem('servers') || '[]');
-                servers = servers.filter(s => s.id !== serverId);
-                localStorage.setItem('servers', JSON.stringify(servers));
-                renderServersList();
-                renderServerInfo();
-                window.dispatchEvent(new CustomEvent('serversUpdated'));
+            btn.addEventListener('click', () => {
+                const serverId = parseInt(btn.getAttribute('data-id'), 10);
+                if (!Number.isNaN(serverId)) {
+                    handleDeleteServer(serverId);
+                }
             });
         });
     }
 
-    // Function to render server info cards in portal
-    function renderServerInfo() {
-        const serverInfoContainer = document.getElementById('portal-battlemetrics-grid');
-        if (!serverInfoContainer || !window.Battlemetrics) return;
+    function renderServerCards(servers) {
+        if (!serverInfoContainer || !window.Battlemetrics) {
+            return;
+        }
 
-        const servers = JSON.parse(localStorage.getItem('servers') || '[]');
-        Battlemetrics.renderCards(serverInfoContainer, servers);
+        const normalizedServers = Array.isArray(servers)
+            ? servers.map(normalizeServerForCard)
+            : [];
+
+        window.Battlemetrics.renderCards(serverInfoContainer, normalizedServers);
     }
 
-    // Initial render
-    renderServersList();
-    renderServerInfo();
-    
-    // Listen for server updates
-    window.addEventListener('serversUpdated', () => {
-        renderServersList();
-        renderServerInfo();
-    });
+    function normalizeServerForCard(server = {}) {
+        return {
+            id: server.id,
+            battlemetricsId: server.battlemetrics_id || server.battlemetricsId || '',
+            displayName: server.display_name || server.displayName || '',
+            gameTitle: server.game_title || server.gameTitle || '',
+            region: server.region || server.regionLabel || ''
+        };
+    }
+
+    async function addServer(battlemetricsId) {
+        const response = await fetch(API_ENDPOINTS.add, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ battlemetricsId })
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Failed to add server.');
+        }
+
+        return result.server || null;
+    }
+
+    async function handleDeleteServer(serverId) {
+        const confirmed = window.confirm('Remove this server from the portal?');
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            await deleteServer(serverId);
+            await loadServers();
+        } catch (error) {
+            console.error('Failed to remove server:', error);
+            alert(error.message || 'Unable to delete the server right now.');
+        }
+    }
+
+    async function deleteServer(serverId) {
+        const response = await fetch(API_ENDPOINTS.remove, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ id: serverId })
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Failed to delete server.');
+        }
+
+        return true;
+    }
+
+    function toggleAddServerForm(isSubmitting) {
+        if (!addServerForm) {
+            return;
+        }
+
+        const battlemetricsInput = addServerForm.querySelector('#battlemetrics-id');
+        const submitButton = addServerForm.querySelector('button[type="submit"]');
+
+        if (battlemetricsInput) {
+            battlemetricsInput.disabled = isSubmitting;
+        }
+
+        if (submitButton) {
+            submitButton.disabled = isSubmitting;
+        }
+    }
+
+    function setAddServerError(message) {
+        if (!addServerError) {
+            return;
+        }
+
+        addServerError.textContent = message;
+        addServerError.classList.toggle('active', Boolean(message));
+    }
+
+    function setServerInfoMessage(message) {
+        if (!serverInfoContainer) {
+            return;
+        }
+
+        serverInfoContainer.classList.remove('bm-grid');
+        serverInfoContainer.innerHTML = `<p class="bm-empty-state">${escapeHtml(message)}</p>`;
+    }
+
+    function escapeHtml(value = '') {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Initial load
+    loadServers();
+
+    function getNavWrapper(tabId) {
+        const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+        return navItem ? navItem.closest('.nav-item-wrapper') : null;
+    }
+
+    function setWrapperExpansion(tabId, expanded) {
+        const wrapper = getNavWrapper(tabId);
+        if (!wrapper) {
+            return;
+        }
+
+        if (expanded) {
+            navItemWrappers.forEach(w => {
+                if (w !== wrapper) {
+                    w.classList.remove('expanded');
+                }
+            });
+            wrapper.classList.add('expanded');
+        } else {
+            wrapper.classList.remove('expanded');
+        }
+    }
 });
 
