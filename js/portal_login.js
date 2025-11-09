@@ -1,5 +1,5 @@
 (() => {
-    const ADMIN_PASSWORD = 'OPRAdmin2024!';
+    const API_ENDPOINT = 'Api/php/login.php';
     const REDIRECT_URL = 'portal.html';
     const LOADING_DELAY_MS = 1200;
 
@@ -7,35 +7,51 @@
 
     function getElements() {
         return {
+            usernameInput: document.getElementById('usernameInput'),
             passwordInput: document.getElementById('passwordInput'),
-            passwordError: document.getElementById('passwordError'),
+            loginError: document.getElementById('loginError'),
             loadingScreen: document.getElementById('loadingScreen'),
-            enterButton: document.querySelector('.password-modal .add-server-btn')
+            enterButton: document.querySelector('.password-modal .add-server-btn'),
+            loginForm: document.getElementById('loginForm')
         };
     }
 
-    function showError(message) {
-        const { passwordError, passwordInput } = getElements();
-        if (!passwordError || !passwordInput) {
+    function toggleFieldError(field, hasError) {
+        if (!field) {
+            return;
+        }
+        field.classList.toggle('input-error', Boolean(hasError));
+        if (hasError) {
+            field.setAttribute('aria-invalid', 'true');
+        } else {
+            field.removeAttribute('aria-invalid');
+        }
+    }
+
+    function showError(message, fieldKey) {
+        const { loginError, usernameInput, passwordInput } = getElements();
+        if (!loginError) {
             return;
         }
 
-        passwordError.textContent = message;
-        passwordError.style.display = 'block';
-        passwordInput.setAttribute('aria-invalid', 'true');
-        passwordInput.classList.add('input-error');
+        loginError.textContent = message;
+        loginError.style.display = message ? 'block' : 'none';
+
+        toggleFieldError(usernameInput, fieldKey === 'name');
+        toggleFieldError(passwordInput, fieldKey === 'password');
     }
 
     function clearError() {
-        const { passwordError, passwordInput } = getElements();
-        if (!passwordError || !passwordInput) {
+        const { loginError, usernameInput, passwordInput } = getElements();
+        if (!loginError) {
             return;
         }
 
-        passwordError.style.display = 'none';
-        passwordError.textContent = '';
-        passwordInput.removeAttribute('aria-invalid');
-        passwordInput.classList.remove('input-error');
+        loginError.textContent = '';
+        loginError.style.display = 'none';
+
+        toggleFieldError(usernameInput, false);
+        toggleFieldError(passwordInput, false);
     }
 
     function setLoadingState(isLoading) {
@@ -59,46 +75,90 @@
         }
     }
 
-    function handlePasswordCheck() {
+    async function handleLogin(event) {
+        if (event) {
+            event.preventDefault();
+        }
+
         if (isProcessing) {
             return;
         }
 
-        const { passwordInput } = getElements();
-        if (!passwordInput) {
+        const { usernameInput, passwordInput } = getElements();
+        if (!usernameInput || !passwordInput) {
             return;
         }
 
-        const password = passwordInput.value.trim();
+        const name = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!name) {
+            showError('Name is required.', 'name');
+            usernameInput.focus();
+            return;
+        }
+
         if (!password) {
-            showError('Password is required.');
+            showError('Password is required.', 'password');
+            passwordInput.focus();
             return;
         }
 
         clearError();
         isProcessing = true;
-
-        if (password !== ADMIN_PASSWORD) {
-            showError('Incorrect password. Please try again.');
-            passwordInput.focus();
-            passwordInput.select();
-            isProcessing = false;
-            return;
-        }
-
         setLoadingState(true);
-        setTimeout(() => {
-            window.location.href = REDIRECT_URL;
-        }, LOADING_DELAY_MS);
 
-        isProcessing = false;
+        let loginSuccessful = false;
+
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, password }),
+                credentials: 'same-origin'
+            });
+
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok || !result.success) {
+                const message = result.message || 'Invalid credentials. Please try again.';
+                showError(message);
+                passwordInput.focus();
+                passwordInput.select();
+                return;
+            }
+
+            loginSuccessful = true;
+
+            setTimeout(() => {
+                window.location.href = result.redirectUrl || REDIRECT_URL;
+            }, LOADING_DELAY_MS);
+        } catch (error) {
+            console.error('Login error:', error);
+            showError('Unable to reach the server. Please try again.');
+        } finally {
+            if (!loginSuccessful) {
+                setLoadingState(false);
+                isProcessing = false;
+            } else {
+                isProcessing = false;
+            }
+        }
     }
 
     function init() {
-        const { passwordInput, enterButton } = getElements();
-        if (!passwordInput || !enterButton) {
+        const { usernameInput, passwordInput, loginForm } = getElements();
+        if (!usernameInput || !passwordInput || !loginForm) {
             return;
         }
+
+        usernameInput.addEventListener('input', () => {
+            if (usernameInput.value.trim().length > 0) {
+                clearError();
+            }
+        });
 
         passwordInput.addEventListener('input', () => {
             if (passwordInput.value.trim().length > 0) {
@@ -106,20 +166,8 @@
             }
         });
 
-        passwordInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                handlePasswordCheck();
-            }
-        });
-
-        enterButton.addEventListener('click', (event) => {
-            event.preventDefault();
-            handlePasswordCheck();
-        });
+        loginForm.addEventListener('submit', handleLogin);
     }
-
-    window.checkPassword = handlePasswordCheck;
 
     document.addEventListener('DOMContentLoaded', init);
 })();

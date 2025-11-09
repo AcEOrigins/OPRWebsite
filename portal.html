@@ -20,6 +20,10 @@
                     <i class="fas fa-edit nav-icon"></i>
                     <span class="nav-text">Manage Site</span>
                 </a></li>
+                <li><a href="#" class="nav-item" data-tab="manage-access">
+                    <i class="fas fa-user-shield nav-icon"></i>
+                    <span class="nav-text">Manage Access</span>
+                </a></li>
                 <li><a href="#" class="nav-item" data-tab="battlemetrics">
                     <i class="fas fa-chart-line nav-icon"></i>
                     <span class="nav-text">BattleMetrics</span>
@@ -77,6 +81,41 @@
 
             <!-- Logs Tab -->
             <div class="tab-content" id="logs">
+            </div>
+
+            <!-- Manage Access Tab -->
+            <div class="tab-content" id="manage-access">
+                <div class="manage-access-panel">
+                    <h2>Manage Access</h2>
+                    <p class="manage-access-description">Create, update, and remove portal accounts to control who can manage site content.</p>
+
+                    <div class="access-grid">
+                        <div class="access-card">
+                            <div class="access-card-header">
+                                <i class="fas fa-users"></i>
+                                <h3>Account Directory</h3>
+                            </div>
+                            <p>Review current users with portal access, reset passwords, or deactivate accounts that are no longer needed.</p>
+                            <button class="btn-primary" type="button" disabled>View Accounts</button>
+                        </div>
+                        <div class="access-card">
+                            <div class="access-card-header">
+                                <i class="fas fa-user-plus"></i>
+                                <h3>Add New User</h3>
+                            </div>
+                            <p>Onboard new staff by creating secure credentials. Strong passwords are enforced to keep the portal protected.</p>
+                            <button class="btn-secondary" type="button" disabled>Add User</button>
+                        </div>
+                        <div class="access-card">
+                            <div class="access-card-header">
+                                <i class="fas fa-shield-alt"></i>
+                                <h3>Security Policies</h3>
+                            </div>
+                            <p>Document password rotation schedules, recovery contacts, and other access governance details for your team.</p>
+                            <button class="btn-secondary" type="button" disabled>Manage Policies</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- BattleMetrics Tab -->

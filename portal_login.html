@@ -15,12 +15,17 @@
                 <img src="assets/opr1.jpg" alt="OPR Fargo">
             </div>
             <h2>Admin Access</h2>
-            <p>Please enter the admin password to continue</p>
-            <div class="form-group">
-                <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
-                <p class="error-message" id="passwordError" style="display: none; color: var(--error); margin-top: 0.5rem; font-size: 0.9rem;"></p>
-            </div>
-            <button class="add-server-btn" onclick="checkPassword()">Enter</button>
+            <p>Please enter your credentials to continue</p>
+            <form class="login-form" id="loginForm" novalidate>
+                <div class="form-group">
+                    <input type="text" id="usernameInput" placeholder="Enter name" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
+                </div>
+                <p class="error-message" id="loginError" style="display: none;"></p>
+                <button class="add-server-btn" type="submit">Enter</button>
+            </form>
         </div>
     </div>
 

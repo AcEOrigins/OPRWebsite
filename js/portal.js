@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'dashboard': 'Dashboard',
         'server-control': 'Server Control',
         'manage-content': 'Manage Site',
+        'manage-access': 'Manage Access',
         'players': 'Players',
         'settings': 'Settings',
         'logs': 'Logs',

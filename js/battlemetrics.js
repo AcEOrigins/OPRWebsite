@@ -39,55 +39,64 @@
     function createServerCard(server) {
         const serverName = escapeHtml(server.displayName || server.name || 'Untitled Server');
         const card = document.createElement('div');
-        card.className = 'bm-card';
+        card.className = 'server-card';
         card.dataset.serverId = server.id;
 
         card.innerHTML = `
-            <div class="bm-status-line" data-role="status-line"></div>
-            <div class="bm-card-header">
-                <h2 class="bm-card-title">${serverName}</h2>
-                <div class="bm-status" data-role="status">
-                    <span class="bm-status-dot" data-role="status-dot"></span>
-                    <span class="bm-status-text" data-role="status-text">Loading...</span>
+            <div class="server-status-line" data-role="status-line"></div>
+
+            <div class="server-card-header">
+                <h2 class="server-card-title">${serverName}</h2>
+                <div class="status-indicator" data-role="status">
+                    <span class="status-dot" data-role="status-dot"></span>
+                    <span class="status-text" data-role="status-text">Loading...</span>
                 </div>
             </div>
-            <div class="bm-players-row">
-                <div class="bm-info-card square">
-                    <div class="bm-info-label">Players</div>
-                    <div class="bm-info-value" data-role="players">-</div>
+
+            <div class="server-card-content">
+                <div class="players-pair">
+                    <div class="info-card square-card">
+                        <div class="info-label">Players</div>
+                        <div class="info-value" data-role="players">-</div>
+                    </div>
+                    <div class="info-card square-card">
+                        <div class="info-label">Max Players</div>
+                        <div class="info-value" data-role="max-players">-</div>
+                    </div>
                 </div>
-                <div class="bm-info-card square">
-                    <div class="bm-info-label">Max Players</div>
-                    <div class="bm-info-value" data-role="max-players">-</div>
+
+                <div class="server-info-grid">
+                    <div class="info-card">
+                        <div class="info-label">Map</div>
+                        <div class="info-value" data-role="map">Loading...</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Game Mode</div>
+                        <div class="info-value" data-role="game-mode">Loading...</div>
+                    </div>
                 </div>
-            </div>
-            <div class="bm-meta-row">
-                <div class="bm-info-card">
-                    <div class="bm-info-label">Map</div>
-                    <div class="bm-info-value" data-role="map">Loading...</div>
+
+                <div class="uptime-card-container">
+                    <div class="info-card uptime-card">
+                        <div class="info-label">Uptime</div>
+                        <div class="info-value" data-role="uptime">N/A</div>
+                    </div>
                 </div>
-                <div class="bm-info-card">
-                    <div class="bm-info-label">Game Mode</div>
-                    <div class="bm-info-value" data-role="game-mode">Loading...</div>
+
+                <div class="server-connect-section">
+                    <div class="server-ip-display">
+                        <span>Server IP:</span>
+                        <span class="ip-address" data-role="ip-address">Loading...</span>
+                        <button class="copy-btn" type="button" data-role="copy-btn">Copy</button>
+                    </div>
                 </div>
-            </div>
-            <div class="bm-uptime-card">
-                <div class="bm-info-card">
-                    <div class="bm-info-label">Uptime</div>
-                    <div class="bm-info-value" data-role="uptime">N/A</div>
-                </div>
-            </div>
-            <div class="bm-ip-wrapper">
-                <div class="bm-ip-text">
-                    <span class="bm-info-label">Server IP</span>
-                    <span class="bm-ip-address" data-role="ip-address">Loading...</span>
-                </div>
-                <button class="bm-copy-btn" type="button" data-role="copy-btn">Copy</button>
             </div>
         `;
 
         const copyBtn = card.querySelector('[data-role="copy-btn"]');
-        copyBtn.addEventListener('click', () => copyIpToClipboard(card));
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => copyIpToClipboard(card));
+        }
 
         return card;
     }
@@ -143,12 +152,20 @@
         const statusLine = card.querySelector('[data-role="status-line"]');
 
         const isOnline = status === STATUS_ONLINE;
-        statusDot.classList.toggle('online', isOnline);
-        statusDot.classList.toggle('offline', !isOnline);
-        statusLine.classList.toggle('online', isOnline);
-        statusLine.classList.toggle('offline', !isOnline);
 
-        statusText.textContent = isOnline ? 'Online' : 'Offline';
+        if (statusDot) {
+            statusDot.classList.toggle('online', isOnline);
+            statusDot.classList.toggle('offline', !isOnline);
+        }
+
+        if (statusLine) {
+            statusLine.classList.toggle('online', isOnline);
+            statusLine.classList.toggle('offline', !isOnline);
+        }
+
+        if (statusText) {
+            statusText.textContent = isOnline ? 'Online' : 'Offline';
+        }
     }
 
     function setText(card, role, value) {
@@ -170,17 +187,26 @@
 
     function copyIpToClipboard(card) {
         const ipEl = card.querySelector('[data-role="ip-address"]');
-        if (!ipEl) return;
+        if (!ipEl) {
+            return;
+        }
 
         const value = ipEl.textContent.trim();
-        if (!value || value === 'Loading...' || value === 'N/A') return;
+        if (!value || value === 'Loading...' || value === 'N/A') {
+            return;
+        }
 
         navigator.clipboard.writeText(value).then(() => {
             const btn = card.querySelector('[data-role="copy-btn"]');
-            if (!btn) return;
+            if (!btn) {
+                return;
+            }
+
             const original = btn.textContent;
             btn.textContent = 'Copied!';
-            setTimeout(() => (btn.textContent = original), 1500);
+            setTimeout(() => {
+                btn.textContent = original;
+            }, 1500);
         }).catch(error => {
             console.error('Copy failed:', error);
         });
