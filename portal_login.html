@@ -8,7 +8,43 @@
 </head>
 <body>
     <div class="container">
-        <h1>OPR Fargo - Portal Login</h1>
+         <!-- Password Protection Modal -->
+    <div class="password-modal" id="passwordModal">
+        <div class="password-modal-content">
+            <div class="password-modal-logo">
+                <img src="assets/opr1.jpg" alt="OPR Fargo">
+            </div>
+            <h2>Admin Access</h2>
+            <p>Please enter the admin password to continue</p>
+            <div class="form-group">
+                <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
+                <p class="error-message" id="passwordError" style="display: none; color: var(--error); margin-top: 0.5rem; font-size: 0.9rem;"></p>
+            </div>
+            <button class="add-server-btn" onclick="checkPassword()">Enter</button>
+        </div>
     </div>
+
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen" style="display: none;">
+        <div class="loading-logo-container">
+            <div class="loading-logo" id="loadingLogo">
+                <img src="assets/opr1.jpg" alt="OPR Fargo">
+            </div>
+            <svg class="trace-svg" viewBox="0 0 200 200">
+                <!-- Yellow trace (Ukrainian flag yellow) -->
+                <circle class="trace-line trace-yellow" cx="100" cy="100" r="70" fill="none" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+                <!-- Blue trace (Ukrainian flag blue) -->
+                <circle class="trace-line trace-blue" cx="100" cy="100" r="70" fill="none" stroke="#0057B8" stroke-width="4" stroke-linecap="round"/>
+                <!-- White trace (Russian flag white) -->
+                <circle class="trace-line trace-white" cx="100" cy="100" r="70" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+                <!-- Blue trace 2 (Russian flag blue) -->
+                <circle class="trace-line trace-blue2" cx="100" cy="100" r="70" fill="none" stroke="#0039A6" stroke-width="4" stroke-linecap="round"/>
+                <!-- Red trace (Russian flag red) -->
+                <circle class="trace-line trace-red" cx="100" cy="100" r="70" fill="none" stroke="#D52B1E" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+        </div>
+    </div>
+    </div>
+    <script src="js/portal_login.js"></script>
 </body>
 </html>
