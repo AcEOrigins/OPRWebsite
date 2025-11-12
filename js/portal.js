@@ -1,1205 +1,1065 @@
-// Portal Navigation Functionality
-document.addEventListener('DOMContentLoaded', async function() {
-    const navItems = Array.from(document.querySelectorAll('.nav-item[data-tab]'));
-    const navItemWrappers = Array.from(document.querySelectorAll('.nav-item-wrapper'));
-    const tabContents = document.querySelectorAll('.tab-content');
-    const pageTitle = document.getElementById('page-title');
-    const serverInfoContainer = document.getElementById('portal-battlemetrics-grid');
-    const ourServersTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
-	const announcementsTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="server-announcements"]');
-    const addServerError = document.getElementById('add-server-error');
-	const manageAccessTab = document.getElementById('manage-access');
-	const portalRoot = document.getElementById('portal-root');
+/**
+ * OPR Portal Admin Dashboard
+ * Clean, modular architecture for server/announcement/user management
+ */
 
-	const API_ENDPOINTS = {
-		list: 'getServers.php',
-		add: 'saveServer.php',
-		remove: 'deleteServer.php',
-		listAnnouncements: 'getAnnouncements.php',
-		addAnnouncement: 'saveAnnouncement.php',
-		deleteAnnouncement: 'deleteAnnouncement.php',
-		listUsers: 'listUsers.php',
-		addUser: 'addUser.php',
-		deactivateUser: 'deactivateUser.php',
-		reactivateUser: 'reactivateUser.php',
-		resetUserPassword: 'resetUserPassword.php',
-		authCheck: 'auth_check.php'
-	};
+// ============================================================================
+// API Layer - All endpoints and HTTP communication
+// ============================================================================
 
-    let serversCache = [];
-	let currentUser = null;
+const API = {
+  endpoints: {
+    authCheck: 'auth_check.php',
+    listServers: 'getServers.php',
+    saveServer: 'saveServer.php',
+    deleteServer: 'deleteServer.php',
+    listAnnouncements: 'getAnnouncements.php',
+    saveAnnouncement: 'saveAnnouncement.php',
+    deleteAnnouncement: 'deleteAnnouncement.php',
+    listUsers: 'listUsers.php',
+    addUser: 'addUser.php',
+    deactivateUser: 'deactivateUser.php',
+    reactivateUser: 'reactivateUser.php',
+    resetUserPassword: 'resetUserPassword.php'
+  },
 
-	// Enforce authentication and apply role-based visibility
-	// Ensure portal content is hidden until auth is verified
-	if (portalRoot) {
-		portalRoot.style.display = 'none';
-	}
-	
-	try {
-		const authRes = await fetch(API_ENDPOINTS.authCheck, { 
-			credentials: 'same-origin', 
-			headers: { 'Accept': 'application/json' }, 
-			cache: 'no-store' 
-		});
-		
-		if (!authRes.ok) {
-			// If auth endpoint doesn't exist or fails, redirect to login
-			console.error('Auth check failed: HTTP', authRes.status);
-			window.location.replace('portal_login.html');
-			return;
-		}
-		
-		const contentType = authRes.headers.get('content-type') || '';
-		if (!contentType.includes('application/json')) {
-			// Not JSON response, redirect to login
-			console.error('Auth check failed: Invalid content type', contentType);
-			window.location.replace('portal_login.html');
-			return;
-		}
-		
-		const auth = await authRes.json();
-		if (!auth || auth.authenticated !== true) {
-			// Not authenticated, redirect to login
-			console.log('Not authenticated, redirecting to login');
-			window.location.replace('portal_login.html');
-			return;
-		}
-		
-		// Authenticated - show portal
-		currentUser = auth;
-		applyRoleVisibility(auth);
-		insertWelcome(auth);
-		
-		// Hide loading screen
-		const loadingScreen = document.getElementById('auth-loading');
-		if (loadingScreen) {
-			loadingScreen.style.display = 'none';
-		}
-		
-		if (portalRoot) {
-			portalRoot.style.display = '';
-		}
-	} catch (e) {
-		// Any error - redirect to login
-		console.error('Auth check failed:', e);
-		window.location.replace('portal_login.html');
-		return;
-	}
-
-    const tabTitles = {
-        'dashboard': 'Dashboard',
-        'server-control': 'Server Control',
-        'manage-content': 'Manage Site',
-        'manage-access': 'Manage Access',
-        'players': 'Players',
-        'settings': 'Settings',
-        'logs': 'Logs',
-        'battlemetrics': 'BattleMetrics'
+  async fetch(endpoint, options = {}) {
+    const { method = 'GET', body = null, headers = {} } = options;
+    const fetchOpts = {
+      method,
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', ...headers },
+      cache: 'no-store'
     };
 
-    const subTabsConfig = {
-        'manage-content': [
-            { id: 'slideshow', label: 'Slideshow' },
-            { id: 'server-info', label: 'Server Info' },
-            { id: 'our-servers', label: 'Our Servers' },
-            { id: 'footer', label: 'Footer' },
-			{ id: 'navigation', label: 'Navigation' },
-			{ id: 'server-announcements', label: 'Server Announcements' }
-        ]
+    if (body) {
+      fetchOpts.headers['Content-Type'] = 'application/json';
+      fetchOpts.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(endpoint, fetchOpts);
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Invalid content-type: ${contentType}`);
+    }
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.success === false) {
+      throw new Error(result.message || `HTTP ${response.status}`);
+    }
+
+    return result;
+  },
+
+  checkAuth: () => API.fetch(API.endpoints.authCheck),
+  listServers: () => API.fetch(API.endpoints.listServers),
+  saveServer: (battlemetricsId) => API.fetch(API.endpoints.saveServer, {
+    method: 'POST',
+    body: { battlemetricsId }
+  }),
+  deleteServer: (id) => API.fetch(API.endpoints.deleteServer, {
+    method: 'POST',
+    body: { id }
+  }),
+  listAnnouncements: (active = 0) => API.fetch(`${API.endpoints.listAnnouncements}?active=${active}`),
+  saveAnnouncement: (payload) => API.fetch(API.endpoints.saveAnnouncement, {
+    method: 'POST',
+    body: payload
+  }),
+  deleteAnnouncement: (id) => API.fetch(API.endpoints.deleteAnnouncement, {
+    method: 'POST',
+    body: { id }
+  }),
+  listUsers: () => API.fetch(API.endpoints.listUsers),
+  addUser: (name, password) => API.fetch(API.endpoints.addUser, {
+    method: 'POST',
+    body: { name, password }
+  }),
+  deactivateUser: (id) => API.fetch(API.endpoints.deactivateUser, {
+    method: 'POST',
+    body: { id }
+  }),
+  reactivateUser: (id) => API.fetch(API.endpoints.reactivateUser, {
+    method: 'POST',
+    body: { id }
+  }),
+  resetUserPassword: (id, password) => API.fetch(API.endpoints.resetUserPassword, {
+    method: 'POST',
+    body: { id, password }
+  })
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const Utils = {
+  escapeHtml(str = '') {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return String(str).replace(/[&<>"']/g, (m) => map[m]);
+  },
+
+  normalizeServer(server) {
+    return {
+      id: server.id,
+      battlemetricsId: server.battlemetrics_id || '',
+      displayName: server.display_name || '',
+      gameTitle: server.game_title || '',
+      region: server.region || ''
+    };
+  },
+
+  getElement(selector) {
+    const el = document.querySelector(selector);
+    if (!el) console.warn(`Element not found: ${selector}`);
+    return el;
+  },
+
+  getAllElements(selector) {
+    return Array.from(document.querySelectorAll(selector));
+  },
+
+  setLoading(el, isLoading) {
+    if (el) {
+      el.disabled = isLoading;
+      el.style.opacity = isLoading ? '0.6' : '1';
+    }
+  },
+
+  show(el) {
+    if (el) el.style.display = '';
+  },
+
+  hide(el) {
+    if (el) el.style.display = 'none';
+  }
+};
+
+// ============================================================================
+// State Management
+// ============================================================================
+
+const State = {
+  currentUser: null,
+  servers: [],
+  
+  setCurrentUser(user) {
+    this.currentUser = user;
+  },
+
+  setServers(servers) {
+    this.servers = Array.isArray(servers) ? servers : [];
+  },
+
+  getRole() {
+    return this.currentUser?.role || 'admin';
+  }
+};
+
+// ============================================================================
+// Authentication & Authorization
+// ============================================================================
+
+const Auth = {
+  async check() {
+    try {
+      const auth = await API.checkAuth();
+      if (!auth.authenticated) {
+        console.log('Not authenticated');
+        window.location.replace('portal_login.html');
+        return null;
+      }
+      State.setCurrentUser(auth);
+      return auth;
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      window.location.replace('portal_login.html');
+      return null;
+    }
+  },
+
+  applyRoleVisibility(role) {
+    const isOwner = role === 'owner';
+    const isAdmin = role === 'admin';
+    const isStaff = role === 'staff';
+
+    // Helper to hide tab and nav item
+    const hideTab = (tabId) => {
+      const navItem = Utils.getElement(`.nav-item[data-tab="${tabId}"]`);
+      const wrapper = navItem?.closest('.nav-item-wrapper');
+      if (wrapper) Utils.hide(wrapper);
+      const tab = Utils.getElement(`#${tabId}`);
+      if (tab) Utils.hide(tab);
     };
 
-    buildSubNavigation();
+    // Owner: no restrictions
+    if (isOwner) return;
+
+    // Admin: hide Manage Access
+    if (isAdmin) {
+      hideTab('manage-access');
+      return;
+    }
+
+    // Staff: only Server Announcements
+    if (isStaff) {
+      hideTab('manage-access');
+      const manageContent = Utils.getElement('#manage-content');
+      if (manageContent) {
+        const otherTabs = manageContent.querySelectorAll('[data-sub-tab]:not([data-sub-tab="server-announcements"])');
+        otherTabs.forEach(tab => Utils.hide(tab));
+      }
+      Utils.getAllElements('.nav-item[data-tab]').forEach(item => {
+        if (!['manage-content', 'battlemetrics'].includes(item.dataset.tab)) {
+          Utils.hide(item.closest('.nav-item-wrapper'));
+          Utils.hide(Utils.getElement(`#${item.dataset.tab}`));
+        }
+      });
+    }
+  },
+
+  insertWelcome(user) {
+    const navHeader = Utils.getElement('.nav-header');
+    if (!navHeader || !user?.userName) return;
+
+    let welcome = navHeader.querySelector('.welcome-text');
+    if (!welcome) {
+      welcome = document.createElement('div');
+      welcome.className = 'welcome-text';
+      welcome.style.cssText = 'color: #b9c2d0; font-size: 0.85rem; margin-left: auto;';
+      navHeader.appendChild(welcome);
+    }
+    welcome.textContent = `Welcome ${user.userName}`;
+  }
+};
+
+// ============================================================================
+// Navigation Manager
+// ============================================================================
+
+const Nav = {
+  tabs: new Map(),
+  subTabs: new Map(),
+
+  init() {
+    const navItems = Utils.getAllElements('.nav-item[data-tab]');
+    const tabContents = Utils.getAllElements('.tab-content');
 
     navItems.forEach(item => {
-        item.addEventListener('click', (event) => {
-            event.preventDefault();
-            const tabName = item.dataset.tab;
-            if (!tabName) {
-                return;
-            }
-
-            const wrapper = getNavWrapper(tabName);
-            const subNav = wrapper ? wrapper.querySelector('.sub-nav') : null;
-            const hasSubNav = subNav && subNav.children.length > 0;
-
-            if (hasSubNav) {
-                const isExpanded = wrapper.classList.contains('expanded');
-                if (isExpanded) {
-                    wrapper.classList.remove('expanded');
-                    return;
-                }
-
-                setWrapperExpansion(tabName, true);
-                setActiveMainTab(tabName, { skipWrapperSync: true });
-                return;
-            }
-
-            navItemWrappers.forEach(w => w.classList.remove('expanded'));
-            setActiveMainTab(tabName);
-        });
+      const tabId = item.dataset.tab;
+      this.tabs.set(tabId, { navItem: item, wrapper: item.closest('.nav-item-wrapper') });
     });
 
-    const initialNavItem = document.querySelector('.nav-item.active[data-tab]') || navItems[0];
-    if (initialNavItem) {
-        const initialTab = initialNavItem.dataset.tab;
-        if (initialTab) {
-            if (getDefaultSubTab(initialTab)) {
-                setWrapperExpansion(initialTab, true);
-                setActiveMainTab(initialTab, { skipWrapperSync: true });
-            } else {
-                setActiveMainTab(initialTab);
-            }
-        }
-    }
-
-    function buildSubNavigation() {
-        Object.entries(subTabsConfig).forEach(([tabId, subTabs]) => {
-            const subNav = document.querySelector(`.sub-nav[data-parent-tab="${tabId}"]`);
-            if (!subNav) {
-                return;
-            }
-
-            subNav.innerHTML = '';
-
-            subTabs.forEach((subTab) => {
-                const listItem = document.createElement('li');
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'sub-nav-item';
-                button.textContent = subTab.label;
-                button.dataset.parentTab = tabId;
-                button.dataset.subTab = subTab.id;
-                button.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    setActiveMainTab(tabId, { preserveSubTab: true });
-                    switchSubTab(tabId, subTab.id);
-                });
-                listItem.appendChild(button);
-                subNav.appendChild(listItem);
-            });
-        });
-    }
-
-    function setActiveMainTab(tabId, options = {}) {
-        const { preserveSubTab = false, skipSubTabActivation = false, skipWrapperSync = false } = options;
-
-        navItems.forEach(item => {
-            item.classList.toggle('active', item.dataset.tab === tabId);
-        });
-
-        tabContents.forEach(content => {
-            content.classList.toggle('active', content.id === tabId);
-        });
-
-        if (pageTitle && tabTitles[tabId]) {
-            pageTitle.textContent = tabTitles[tabId];
-        }
-
-        if (!skipWrapperSync) {
-            const hasDefaultSub = Boolean(getDefaultSubTab(tabId));
-            setWrapperExpansion(tabId, hasDefaultSub);
-        }
-
-        if (!preserveSubTab && !skipSubTabActivation) {
-            const defaultSubTab = getDefaultSubTab(tabId);
-            if (defaultSubTab) {
-                switchSubTab(tabId, defaultSubTab);
-            } else {
-                updateAddServerButton(tabId, null);
-            }
-		} else if (skipSubTabActivation) {
-            updateAddServerButton(tabId, null);
-        }
-
-		// Initialize Manage Access UI when switching to that tab
-		if (tabId === 'manage-access') {
-			ensureManageAccessUI();
-			loadUsers();
-		}
-    }
-
-    function getDefaultSubTab(tabId) {
-        const subTabs = subTabsConfig[tabId];
-        return subTabs && subTabs.length > 0 ? subTabs[0].id : null;
-    }
-
-    function switchSubTab(mainTabId, subTabId) {
-        const mainTab = document.getElementById(mainTabId);
-        if (!mainTab) {
-            return;
-        }
-
-        setWrapperExpansion(mainTabId, true);
-
-        mainTab.querySelectorAll('.sub-tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-
-        const activeContent = mainTab.querySelector(`[data-sub-tab="${subTabId}"]`);
-        if (activeContent) {
-            activeContent.classList.add('active');
-        }
-
-        const subNav = document.querySelector(`.sub-nav[data-parent-tab="${mainTabId}"]`);
-        if (subNav) {
-            subNav.querySelectorAll('.sub-nav-item').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.subTab === subTabId);
-            });
-        }
-
-        updateAddServerButton(mainTabId, subTabId);
-
-		// Initialize dynamic UIs on demand
-		if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
-			ensureAnnouncementsUI();
-		}
-    }
-
-    function updateAddServerButton(mainTabId, subTabId) {
-        const addServerBtn = document.getElementById('add-server-btn');
-        if (!addServerBtn) {
-            return;
-        }
-
-        if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
-            addServerBtn.style.display = 'flex';
-        } else {
-            addServerBtn.style.display = 'none';
-        }
-    }
-
-    // Modal functionality
-    const addServerBtn = document.getElementById('add-server-btn');
-    const addServerModal = document.getElementById('add-server-modal');
-    const closeModalBtn = document.getElementById('close-modal');
-    const cancelBtn = document.getElementById('cancel-add-server');
-    const addServerForm = document.getElementById('add-server-form');
-
-    // Open modal
-    if (addServerBtn) {
-        addServerBtn.addEventListener('click', () => {
-            addServerModal.classList.add('active');
-        });
-    }
-
-    // Close modal
-    function closeModal() {
-        addServerModal.classList.remove('active');
-        if (addServerForm) {
-            addServerForm.reset();
-        }
-        setAddServerError('');
-    }
-
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', closeModal);
-    }
-
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', closeModal);
-    }
-
-    // Close modal when clicking outside
-    if (addServerModal) {
-        addServerModal.addEventListener('click', (e) => {
-            if (e.target === addServerModal) {
-                closeModal();
-            }
-        });
-    }
-
-    // Handle form submission
-    if (addServerForm) {
-        addServerForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const battlemetricsIdInput = document.getElementById('battlemetrics-id');
-            const battlemetricsId = battlemetricsIdInput ? battlemetricsIdInput.value.trim() : '';
-
-            if (!battlemetricsId) {
-                setAddServerError('BattleMetrics ID is required.');
-                if (battlemetricsIdInput) {
-                    battlemetricsIdInput.focus();
-                }
-                return;
-            }
-
-            setAddServerError('');
-            toggleAddServerForm(true);
-
-            try {
-                await addServer(battlemetricsId);
-                closeModal();
-                await loadServers();
-            } catch (error) {
-                console.error('Failed to add server:', error);
-                setAddServerError(error.message || 'Unable to add server right now.');
-            } finally {
-                toggleAddServerForm(false);
-            }
-        });
-    }
-
-    async function loadServers() {
-        if (!serverInfoContainer) {
-            return;
-        }
-
-        setServerInfoMessage('Loading servers...');
-
-        try {
-            const response = await fetch(API_ENDPOINTS.list, {
-                headers: { 'Accept': 'application/json' },
-                cache: 'no-store'
-            });
-
-            if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (!Array.isArray(data)) {
-                throw new Error('Unexpected response format');
-            }
-
-            serversCache = data;
-            renderServersList(serversCache);
-
-            if (serversCache.length === 0) {
-                setServerInfoMessage('No servers configured yet.');
-            } else {
-                renderServerCards(serversCache);
-            }
-        } catch (error) {
-            console.error('Failed to load servers:', error);
-            renderServersList([]);
-            setServerInfoMessage('Unable to load servers. Please try again later.');
-        }
-    }
-
-    function renderServersList(servers) {
-        if (!ourServersTab) {
-            return;
-        }
-
-        if (!Array.isArray(servers) || servers.length === 0) {
-            ourServersTab.innerHTML = '<p style="color: #cccccc;">No servers have been added yet.</p>';
-            return;
-        }
-
-        let html = '<div class="servers-list">';
-        servers.forEach(server => {
-            const displayName = escapeHtml(server.display_name || server.displayName || 'Unknown Server');
-            const battlemetricsId = escapeHtml(server.battlemetrics_id || server.battlemetricsId || 'N/A');
-            const serverId = Number(server.id) || 0;
-
-            html += `
-                <div class="server-card">
-                    <h3>${displayName}</h3>
-                    <p><strong>BattleMetrics ID:</strong> ${battlemetricsId}</p>
-                    <button class="btn-danger delete-server" data-id="${serverId}">Delete</button>
-                </div>
-            `;
-        });
-        html += '</div>';
-        ourServersTab.innerHTML = html;
-
-        ourServersTab.querySelectorAll('.delete-server').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const serverId = parseInt(btn.getAttribute('data-id'), 10);
-                if (!Number.isNaN(serverId)) {
-                    handleDeleteServer(serverId);
-                }
-            });
-        });
-    }
-
-    function renderServerCards(servers) {
-        if (!serverInfoContainer || !window.Battlemetrics) {
-            return;
-        }
-
-        const normalizedServers = Array.isArray(servers)
-            ? servers.map(normalizeServerForCard)
-            : [];
-
-        window.Battlemetrics.renderCards(serverInfoContainer, normalizedServers);
-    }
-
-    function normalizeServerForCard(server = {}) {
-        return {
-            id: server.id,
-            battlemetricsId: server.battlemetrics_id || server.battlemetricsId || '',
-            displayName: server.display_name || server.displayName || '',
-            gameTitle: server.game_title || server.gameTitle || '',
-            region: server.region || server.regionLabel || ''
-        };
-    }
-
-    async function addServer(battlemetricsId) {
-        const response = await fetch(API_ENDPOINTS.add, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ battlemetricsId })
-        });
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || !result.success) {
-            throw new Error(result.message || 'Failed to add server.');
-        }
-
-        return result.server || null;
-    }
-
-    async function handleDeleteServer(serverId) {
-        const confirmed = window.confirm('Remove this server from the portal?');
-        if (!confirmed) {
-            return;
-        }
-
-        try {
-            await deleteServer(serverId);
-            await loadServers();
-        } catch (error) {
-            console.error('Failed to remove server:', error);
-            alert(error.message || 'Unable to delete the server right now.');
-        }
-    }
-
-    async function deleteServer(serverId) {
-        const response = await fetch(API_ENDPOINTS.remove, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ id: serverId })
-        });
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok || !result.success) {
-            throw new Error(result.message || 'Failed to delete server.');
-        }
-
-        return true;
-    }
-
-    function toggleAddServerForm(isSubmitting) {
-        if (!addServerForm) {
-            return;
-        }
-
-        const battlemetricsInput = addServerForm.querySelector('#battlemetrics-id');
-        const submitButton = addServerForm.querySelector('button[type="submit"]');
-
-        if (battlemetricsInput) {
-            battlemetricsInput.disabled = isSubmitting;
-        }
-
-        if (submitButton) {
-            submitButton.disabled = isSubmitting;
-        }
-    }
-
-    function setAddServerError(message) {
-        if (!addServerError) {
-            return;
-        }
-
-        addServerError.textContent = message;
-        addServerError.classList.toggle('active', Boolean(message));
-    }
-
-    function setServerInfoMessage(message) {
-        if (!serverInfoContainer) {
-            return;
-        }
-
-        serverInfoContainer.classList.remove('bm-grid');
-        serverInfoContainer.innerHTML = `<p class="bm-empty-state">${escapeHtml(message)}</p>`;
-    }
-
-	// =============================
-	// Announcements Management UI
-	// =============================
-	function ensureAnnouncementsUI() {
-		if (!announcementsTab) {
-			return;
-		}
-		if (announcementsTab.dataset.announcementsInit === 'true') {
-			return;
-		}
-
-		renderAnnouncementsUI();
-		announcementsTab.dataset.announcementsInit = 'true';
-	}
-
-	function applyRoleVisibility(auth) {
-		const role = (auth && auth.role || 'admin').toLowerCase();
-
-		// Helper to hide a nav item and its tab content
-		function hideTab(tabId) {
-			const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
-			const wrapper = navItem ? navItem.closest('.nav-item-wrapper') : null;
-			if (wrapper) {
-				wrapper.style.display = 'none';
-			}
-			const tab = document.getElementById(tabId);
-			if (tab) {
-				tab.style.display = 'none';
-			}
-		}
-
-		if (role === 'owner') {
-			return; // no restrictions
-		}
-
-		if (role === 'admin') {
-			// Hide Manage Access
-			hideTab('manage-access');
-			return;
-		}
-
-		if (role === 'staff') {
-			// Hide Manage Access
-			hideTab('manage-access');
-
-			// Restrict Manage Site sub-tabs to only Server Announcements
-			if (Array.isArray(subTabsConfig['manage-content'])) {
-				subTabsConfig['manage-content'] = subTabsConfig['manage-content'].filter(st => st.id === 'server-announcements');
-			}
-
-			// Hide other top-level tabs if any (keep battlemetrics and manage-content)
-			const allowedTop = new Set(['manage-content', 'battlemetrics']);
-			document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
-				const tabId = item.getAttribute('data-tab');
-				if (!allowedTop.has(tabId)) {
-					const wrap = item.closest('.nav-item-wrapper');
-					if (wrap) wrap.style.display = 'none';
-					const content = document.getElementById(tabId);
-					if (content) content.style.display = 'none';
-				}
-			});
-		}
-	}
-
-	function insertWelcome(auth) {
-		const navHeader = document.querySelector('.nav-header');
-		if (!navHeader) return;
-		const name = auth && auth.userName ? String(auth.userName) : '';
-		if (!name) return;
-		// Add or update a small welcome line
-		let welcome = navHeader.querySelector('.welcome-text');
-		if (!welcome) {
-			welcome = document.createElement('div');
-			welcome.className = 'welcome-text';
-			welcome.style.color = '#b9c2d0';
-			welcome.style.fontSize = '0.85rem';
-			welcome.style.marginLeft = 'auto';
-			navHeader.appendChild(welcome);
-		}
-		welcome.textContent = `Welcome ${name}`;
-	}
-
-	// =============================
-	// Manage Access (Users)
-	// =============================
-	function ensureManageAccessUI() {
-		if (!manageAccessTab) return;
-		if (manageAccessTab.dataset.accountsInit === 'true') return;
-
-		const viewBtn = manageAccessTab.querySelector('#view-accounts-btn');
-		const addBtn = manageAccessTab.querySelector('#add-user-btn');
-		const section = manageAccessTab.querySelector('#accounts-section');
-
-		if (viewBtn) {
-			viewBtn.addEventListener('click', () => {
-				section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-				loadUsers();
-			});
-		}
-
-		if (addBtn) {
-			addBtn.addEventListener('click', openAddUserModal);
-		}
-
-		manageAccessTab.dataset.accountsInit = 'true';
-	}
-
-	async function loadUsers() {
-		if (!manageAccessTab) return;
-		const section = manageAccessTab.querySelector('#accounts-section');
-		if (!section) return;
-
-		section.innerHTML = '<p style="color: #cccccc;">Loading users...</p>';
-		try {
-			const response = await fetch(API_ENDPOINTS.listUsers, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-			if (!response.ok) {
-				throw new Error(`Request failed with status ${response.status}`);
-			}
-			const users = await response.json();
-			renderUsersList(Array.isArray(users) ? users : []);
-		} catch (error) {
-			console.error('Failed to load users:', error);
-			section.innerHTML = '<p style="color:#ff6b6b;">Unable to load users.</p>';
-		}
-	}
-
-	function renderUsersList(users) {
-		if (!manageAccessTab) return;
-		const section = manageAccessTab.querySelector('#accounts-section');
-		if (!section) return;
-
-		if (!Array.isArray(users) || users.length === 0) {
-			section.innerHTML = '<p style="color: #cccccc;">No users found.</p>';
-			return;
-		}
-
-		let html = '<div class="users-list">';
-		users.forEach(u => {
-			const id = Number(u.id) || 0;
-			const name = escapeHtml(u.name || '');
-			const role = escapeHtml(u.role || 'admin');
-			const active = Number(u.is_active) === 1;
-			const status = active ? 'Active' : 'Inactive';
-
-			html += `
-				<div class="user-row">
-					<div class="user-main">
-						<strong>${name}</strong>
-						<span class="user-role">${role}</span>
-						<span class="user-status">${status}</span>
-					</div>
-					<div class="user-actions">
-						<button class="btn-secondary reset-pass" data-id="${id}">Reset Password</button>
-						${active
-							? `<button class="btn-danger deactivate-user" data-id="${id}">Deactivate</button>`
-							: `<button class="btn-primary reactivate-user" data-id="${id}">Reactivate</button>`
-						}
-					</div>
-				</div>
-			`;
-		});
-		html += '</div>';
-
-		section.innerHTML = html;
-
-		section.querySelectorAll('.deactivate-user').forEach(btn => {
-			btn.addEventListener('click', async () => {
-				const id = parseInt(btn.getAttribute('data-id'), 10);
-				if (Number.isNaN(id)) return;
-				const confirmed = window.confirm('Deactivate this user?');
-				if (!confirmed) return;
-				try {
-					await fetchJsonOk(API_ENDPOINTS.deactivateUser, { id });
-					await loadUsers();
-				} catch (err) {
-					console.error('Failed to deactivate user:', err);
-					alert(err?.message || 'Unable to deactivate user.');
-				}
-			});
-		});
-
-		section.querySelectorAll('.reactivate-user').forEach(btn => {
-			btn.addEventListener('click', async () => {
-				const id = parseInt(btn.getAttribute('data-id'), 10);
-				if (Number.isNaN(id)) return;
-				try {
-					await fetchJsonOk(API_ENDPOINTS.reactivateUser, { id });
-					await loadUsers();
-				} catch (err) {
-					console.error('Failed to reactivate user:', err);
-					alert(err?.message || 'Unable to reactivate user.');
-				}
-			});
-		});
-
-		section.querySelectorAll('.reset-pass').forEach(btn => {
-			btn.addEventListener('click', async () => {
-				const id = parseInt(btn.getAttribute('data-id'), 10);
-				if (Number.isNaN(id)) return;
-				const newPass = window.prompt('Enter a new password:');
-				if (!newPass) return;
-				try {
-					await fetchJsonOk(API_ENDPOINTS.resetUserPassword, { id, password: newPass });
-					alert('Password updated.');
-				} catch (err) {
-					console.error('Failed to reset password:', err);
-					alert(err?.message || 'Unable to reset password.');
-				}
-			});
-		});
-	}
-
-	function openAddUserModal() {
-		const modal = document.getElementById('add-user-modal');
-		if (!modal) return;
-		modal.classList.add('active');
-	}
-
-	// Add User modal behavior
-	const addUserModal = document.getElementById('add-user-modal');
-	const closeAddUserModalBtn = document.getElementById('close-add-user-modal');
-	const cancelAddUserBtn = document.getElementById('cancel-add-user');
-	const addUserForm = document.getElementById('add-user-form');
-	const addUserError = document.getElementById('add-user-error');
-
-	function closeAddUserModal() {
-		if (!addUserModal) return;
-		addUserModal.classList.remove('active');
-		if (addUserForm) addUserForm.reset();
-		if (addUserError) {
-			addUserError.textContent = '';
-			addUserError.classList.remove('active');
-		}
-	}
-
-	if (closeAddUserModalBtn) {
-		closeAddUserModalBtn.addEventListener('click', closeAddUserModal);
-	}
-	if (cancelAddUserBtn) {
-		cancelAddUserBtn.addEventListener('click', closeAddUserModal);
-	}
-	if (addUserModal) {
-		addUserModal.addEventListener('click', (e) => {
-			if (e.target === addUserModal) {
-				closeAddUserModal();
-			}
-		});
-	}
-	if (addUserForm) {
-		addUserForm.addEventListener('submit', async (e) => {
-			e.preventDefault();
-			const nameEl = document.getElementById('user-name');
-			const passEl = document.getElementById('user-password');
-			const name = (nameEl?.value || '').trim();
-			const password = passEl?.value || '';
-			if (!name || !password) {
-				if (addUserError) {
-					addUserError.textContent = 'Username and password are required.';
-					addUserError.classList.add('active');
-				}
-				return;
-			}
-			if (addUserError) {
-				addUserError.textContent = '';
-				addUserError.classList.remove('active');
-			}
-
-			setAddUserSubmitting(true);
-			try {
-				await fetchJsonOk(API_ENDPOINTS.addUser, { name, password });
-				closeAddUserModal();
-				await loadUsers();
-			} catch (err) {
-				console.error('Failed to add user:', err);
-				if (addUserError) {
-					addUserError.textContent = err?.message || 'Unable to add user.';
-					addUserError.classList.add('active');
-				}
-			} finally {
-				setAddUserSubmitting(false);
-			}
-		});
-	}
-
-	function setAddUserSubmitting(isSubmitting) {
-		if (!addUserForm) return;
-		addUserForm.querySelectorAll('input, button').forEach(el => {
-			el.disabled = isSubmitting;
-		});
-	}
-
-	async function fetchJsonOk(url, payload) {
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify(payload || {})
-		});
-		const result = await response.json().catch(() => ({}));
-		if (!response.ok || result.success === false) {
-			throw new Error(result.message || `Request failed (${response.status})`);
-		}
-		return result;
-	}
-
-	function renderAnnouncementsUI() {
-		if (!announcementsTab) {
-			return;
-		}
-
-		announcementsTab.innerHTML = `
-			<div style="margin-bottom: 2rem;">
-				<button class="btn-primary" type="button" id="add-announcement-btn">
-					<i class="fas fa-plus"></i> New Announcement
-				</button>
-			</div>
-
-			<div class="announce-list-wrapper">
-				<h3 style="margin-bottom: 1rem; color: #ffffff;">Existing Announcements</h3>
-				<div id="announcements-list"></div>
-			</div>
-		`;
-
-		// Wire up button to open modal
-		const addBtn = announcementsTab.querySelector('#add-announcement-btn');
-		if (addBtn) {
-			addBtn.addEventListener('click', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				openAnnouncementModal();
-			});
-		}
-
-		// Load existing announcements
-		loadAnnouncementsManagement();
-	}
-
-	function openAnnouncementModal() {
-		let modal = document.getElementById('add-announcement-modal');
-
-		// If the modal markup is missing for any reason, create it on the fly
-		if (!modal) {
-			modal = createAnnouncementModal();
-		}
-
-		// Populate server dropdown
-		const serverSelect = document.getElementById('announcement-server');
-		if (serverSelect && Array.isArray(serversCache)) {
-			serverSelect.innerHTML = '<option value="">All Servers</option>';
-			serversCache.forEach(s => {
-				const option = document.createElement('option');
-				option.value = Number(s.id) || 0;
-				option.textContent = escapeHtml(s.display_name || s.displayName || 'Server');
-				serverSelect.appendChild(option);
-			});
-		}
-
-		// Reset form
-		const form = document.getElementById('add-announcement-form');
-		if (form) {
-			form.reset();
-		}
-
-		// Clear error
-		const errorEl = document.getElementById('add-announcement-error');
-		if (errorEl) {
-			errorEl.textContent = '';
-			errorEl.classList.remove('active');
-		}
-
-		// Show modal
-		modal.classList.add('active');
-		// Hard fallback in case CSS isn't applied yet (e.g. caching or dev server quirks)
-		modal.style.display = 'flex';
-	}
-
-	function closeAnnouncementModal() {
-		const modal = document.getElementById('add-announcement-modal');
-		if (modal) {
-			modal.classList.remove('active');
-			modal.style.display = ''; // revert any hard fallback
-		}
-		const form = document.getElementById('add-announcement-form');
-		if (form) {
-			form.reset();
-		}
-		const errorEl = document.getElementById('add-announcement-error');
-		if (errorEl) {
-			errorEl.textContent = '';
-			errorEl.classList.remove('active');
-		}
-	}
-
-	function setupAnnouncementModal() {
-		const modal = document.getElementById('add-announcement-modal');
-		const form = document.getElementById('add-announcement-form');
-		const closeBtn = document.getElementById('close-add-announcement-modal');
-		const cancelBtn = document.getElementById('cancel-add-announcement');
-
-		if (!modal || !form) return;
-
-		// Close modal handlers
-		if (closeBtn) {
-			closeBtn.addEventListener('click', closeAnnouncementModal);
-		}
-		if (cancelBtn) {
-			cancelBtn.addEventListener('click', closeAnnouncementModal);
-		}
-
-		// Close on overlay click
-		modal.addEventListener('click', (e) => {
-			if (e.target === modal) {
-				closeAnnouncementModal();
-			}
-		});
-
-		// Form submission
-		form.addEventListener('submit', async (e) => {
-			e.preventDefault();
-
-			const messageEl = document.getElementById('announcement-message');
-			const severityEl = document.getElementById('announcement-severity');
-			const serverEl = document.getElementById('announcement-server');
-			const startEl = document.getElementById('announcement-start');
-			const endEl = document.getElementById('announcement-end');
-
-			const payload = {
-				message: (messageEl?.value || '').trim(),
-				severity: (severityEl?.value || 'info'),
-				serverId: (serverEl?.value || '') === '' ? null : Number(serverEl.value),
-				startsAt: startEl?.value || '',
-				endsAt: endEl?.value || '',
-				isActive: 1
-			};
-
-			if (!payload.message) {
-				return setAnnouncementError('Message is required.');
-			}
-
-			setAnnouncementError('');
-			setAnnouncementFormSubmitting(true);
-			try {
-				await addAnnouncement(payload);
-				closeAnnouncementModal();
-				await loadAnnouncementsManagement();
-			} catch (err) {
-				console.error('Failed to save announcement:', err);
-				setAnnouncementError(err?.message || 'Unable to save announcement.');
-			} finally {
-				setAnnouncementFormSubmitting(false);
-			}
-		});
-	}
-
-	// Creates the announcement modal dynamically when missing
-	function createAnnouncementModal() {
-		const overlay = document.createElement('div');
-		overlay.className = 'modal-overlay active';
-		overlay.id = 'add-announcement-modal';
-		overlay.style.display = 'flex'; // ensure visible even if CSS isn't loaded yet
-
-		overlay.innerHTML = `
-			<div class="modal-content">
-				<div class="modal-header">
-					<h2>New Announcement</h2>
-					<button class="modal-close" id="close-add-announcement-modal">
-						<i class="fas fa-times"></i>
-					</button>
-				</div>
-				<div class="modal-body">
-					<form id="add-announcement-form">
-						<div class="form-group">
-							<label for="announcement-message">Message</label>
-							<textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
-						</div>
-
-						<div class="form-row">
-							<div class="form-group">
-								<label for="announcement-severity">Severity</label>
-								<select id="announcement-severity" class="form-input">
-									<option value="info">Info</option>
-									<option value="success">Success</option>
-									<option value="warning">Warning</option>
-									<option value="error">Error</option>
-								</select>
-							</div>
-							<div class="form-group">
-								<label for="announcement-server">Target Server</label>
-								<select id="announcement-server" class="form-input">
-									<option value="">All Servers</option>
-								</select>
-							</div>
-						</div>
-
-						<div class="form-row">
-							<div class="form-group">
-								<label for="announcement-start">Starts At (optional)</label>
-								<input type="datetime-local" id="announcement-start" class="form-input" />
-							</div>
-							<div class="form-group">
-								<label for="announcement-end">Ends At (optional)</label>
-								<input type="datetime-local" id="announcement-end" class="form-input" />
-							</div>
-						</div>
-
-						<p class="form-error" id="add-announcement-error" role="alert" aria-live="assertive"></p>
-
-						<div class="modal-actions">
-							<button type="button" class="btn-secondary" id="cancel-add-announcement">Cancel</button>
-							<button type="submit" class="btn-primary">Create Announcement</button>
-						</div>
-					</form>
-				</div>
-			</div>
-		`;
-
-		document.body.appendChild(overlay);
-		// Wire up handlers for the newly created DOM
-		setupAnnouncementModal();
-		return overlay;
-	}
-
-	function setAnnouncementFormSubmitting(isSubmitting) {
-		const form = document.getElementById('add-announcement-form');
-		if (!form) return;
-		form.querySelectorAll('input, textarea, select, button').forEach(el => {
-			el.disabled = isSubmitting;
-		});
-	}
-
-	function setAnnouncementError(message) {
-		const errorEl = document.getElementById('add-announcement-error');
-		if (!errorEl) return;
-		errorEl.textContent = message || '';
-		errorEl.classList.toggle('active', Boolean(message));
-	}
-
-	async function loadAnnouncementsManagement() {
-		if (!announcementsTab) return;
-		const listContainer = announcementsTab.querySelector('#announcements-list');
-		if (!listContainer) return;
-
-		listContainer.innerHTML = '<p style="color: #cccccc;">Loading announcements...</p>';
-
-		try {
-			const response = await fetch(API_ENDPOINTS.listAnnouncements + '?active=0', {
-				headers: { 'Accept': 'application/json' },
-				cache: 'no-store'
-			});
-			if (!response.ok) {
-				throw new Error(`Request failed with status ${response.status}`);
-			}
-			const data = await response.json();
-			renderAnnouncementsList(Array.isArray(data) ? data : []);
-		} catch (error) {
-			console.error('Failed to load announcements:', error);
-			listContainer.innerHTML = '<p style="color: #ff6b6b;">Unable to load announcements.</p>';
-		}
-	}
-
-	function renderAnnouncementsList(announcements) {
-		if (!announcementsTab) return;
-		const listContainer = announcementsTab.querySelector('#announcements-list');
-		if (!listContainer) return;
-
-		if (!Array.isArray(announcements) || announcements.length === 0) {
-			listContainer.innerHTML = '<p style="color: #cccccc;">No announcements yet.</p>';
-			return;
-		}
-
-		let html = '<div class="announcements-list">';
-		announcements.forEach(a => {
-			const id = Number(a.id) || 0;
-			const serverName = escapeHtml(a.server_name || 'All Servers');
-			const severity = escapeHtml(a.severity || 'info');
-			const msg = escapeHtml(a.message || '');
-			const starts = a.starts_at ? escapeHtml(a.starts_at) : 'Immediate';
-			const ends = a.ends_at ? escapeHtml(a.ends_at) : 'Open-ended';
-			const active = Number(a.is_active) === 1 ? 'Active' : 'Inactive';
-
-			html += `
-				<div class="announcement-card">
-					<div class="announcement-main">
-						<div class="announcement-header">
-							<span class="badge badge-${severity}">${severity.toUpperCase()}</span>
-							<span class="announcement-target">${serverName}</span>
-							<span class="announcement-status">${active}</span>
-						</div>
-						<p class="announcement-message">${msg}</p>
-						<div class="announcement-schedule">
-							<span><strong>Starts:</strong> ${starts}</span>
-							<span><strong>Ends:</strong> ${ends}</span>
-						</div>
-					</div>
-					<div class="announcement-actions">
-						<button class="btn-danger delete-announcement" data-id="${id}">Delete</button>
-					</div>
-				</div>
-			`;
-		});
-		html += '</div>';
-
-		listContainer.innerHTML = html;
-
-		listContainer.querySelectorAll('.delete-announcement').forEach(btn => {
-			btn.addEventListener('click', async () => {
-				const id = parseInt(btn.getAttribute('data-id'), 10);
-				if (Number.isNaN(id)) return;
-				const confirmed = window.confirm('Delete this announcement?');
-				if (!confirmed) return;
-				try {
-					await deleteAnnouncement(id);
-					await loadAnnouncementsManagement();
-				} catch (err) {
-					console.error('Failed to delete announcement:', err);
-					alert(err?.message || 'Unable to delete announcement.');
-				}
-			});
-		});
-	}
-
-	async function addAnnouncement(payload) {
-		const response = await fetch(API_ENDPOINTS.addAnnouncement, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify(payload)
-		});
-		const result = await response.json().catch(() => ({}));
-		if (!response.ok || !result.success) {
-			throw new Error(result.message || 'Failed to save announcement.');
-		}
-		return result.announcement || null;
-	}
-
-	async function deleteAnnouncement(id) {
-		const response = await fetch(API_ENDPOINTS.deleteAnnouncement, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify({ id })
-		});
-		const result = await response.json().catch(() => ({}));
-		if (!response.ok || !result.success) {
-			throw new Error(result.message || 'Failed to delete announcement.');
-		}
-		return true;
-	}
-
-    function escapeHtml(value = '') {
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    // Initial load
-    loadServers();
-	
-	// Setup announcement modal once on page load
-	setupAnnouncementModal();
-
-    function getNavWrapper(tabId) {
-        const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
-        return navItem ? navItem.closest('.nav-item-wrapper') : null;
-    }
-
-    function setWrapperExpansion(tabId, expanded) {
-        const wrapper = getNavWrapper(tabId);
-        if (!wrapper) {
-            return;
-        }
-
-        if (expanded) {
-            navItemWrappers.forEach(w => {
-                if (w !== wrapper) {
-                    w.classList.remove('expanded');
-                }
-            });
-            wrapper.classList.add('expanded');
-        } else {
+    tabContents.forEach(content => {
+      const tabId = content.id;
+      if (!this.tabs.has(tabId)) {
+        this.tabs.set(tabId, { navItem: null, content });
+      } else {
+        this.tabs.get(tabId).content = content;
+      }
+    });
+
+    // Build sub-tabs for manage-content
+    this.buildSubTabs('manage-content', [
+      { id: 'slideshow', label: 'Slideshow' },
+      { id: 'server-info', label: 'Server Info' },
+      { id: 'our-servers', label: 'Our Servers' },
+      { id: 'footer', label: 'Footer' },
+      { id: 'navigation', label: 'Navigation' },
+      { id: 'server-announcements', label: 'Server Announcements' }
+    ]);
+
+    this.wireNavigation();
+  },
+
+  buildSubTabs(parentTabId, subTabs) {
+    const subNav = Utils.getElement(`.sub-nav[data-parent-tab="${parentTabId}"]`);
+    if (!subNav) return;
+
+    subNav.innerHTML = '';
+    subTabs.forEach(sub => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sub-nav-item';
+      btn.textContent = sub.label;
+      btn.dataset.parentTab = parentTabId;
+      btn.dataset.subTab = sub.id;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.selectTab(parentTabId, true);
+        this.selectSubTab(parentTabId, sub.id);
+      });
+      li.appendChild(btn);
+      subNav.appendChild(li);
+    });
+
+    this.subTabs.set(parentTabId, subTabs);
+  },
+
+  wireNavigation() {
+    Utils.getAllElements('.nav-item[data-tab]').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tabId = item.dataset.tab;
+        const hasSubNav = Boolean(this.subTabs.has(tabId));
+
+        if (hasSubNav) {
+          const wrapper = item.closest('.nav-item-wrapper');
+          const isExpanded = wrapper?.classList.contains('expanded');
+          if (isExpanded) {
             wrapper.classList.remove('expanded');
+            return;
+          }
+          this.selectTab(tabId, true);
+          return;
         }
-    }
-});
 
+        this.selectTab(tabId, false);
+      });
+    });
+
+    // Initialize first tab
+    const firstItem = Utils.getElement('.nav-item.active[data-tab]') || Utils.getAllElements('.nav-item[data-tab]')[0];
+    if (firstItem) {
+      const tabId = firstItem.dataset.tab;
+      const hasSubNav = this.subTabs.has(tabId);
+      if (hasSubNav) {
+        this.selectTab(tabId, true);
+        const firstSub = this.subTabs.get(tabId)[0];
+        if (firstSub) this.selectSubTab(tabId, firstSub.id);
+      } else {
+        this.selectTab(tabId, false);
+      }
+    }
+  },
+
+  selectTab(tabId, expand = false) {
+    // Deselect all
+    Utils.getAllElements('.nav-item[data-tab]').forEach(item => {
+      item.classList.remove('active');
+    });
+    Utils.getAllElements('.tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+
+    // Collapse all wrappers
+    Utils.getAllElements('.nav-item-wrapper').forEach(w => {
+      w.classList.remove('expanded');
+    });
+
+    // Select this tab
+    const tab = this.tabs.get(tabId);
+    if (tab?.navItem) tab.navItem.classList.add('active');
+    if (tab?.content) tab.content.classList.add('active');
+    if (tab?.wrapper && expand) tab.wrapper.classList.add('expanded');
+
+    // Update page title
+    const titles = {
+      'dashboard': 'Dashboard', 'server-control': 'Server Control', 'manage-content': 'Manage Site',
+      'manage-access': 'Manage Access', 'players': 'Players', 'settings': 'Settings',
+      'logs': 'Logs', 'battlemetrics': 'BattleMetrics'
+    };
+    const pageTitle = Utils.getElement('#page-title');
+    if (pageTitle) pageTitle.textContent = titles[tabId] || tabId;
+
+    // Initialize tab if needed
+    if (tabId === 'manage-access') Managers.manageAccess.init();
+  },
+
+  selectSubTab(mainTabId, subTabId) {
+    const mainTab = Utils.getElement(`#${mainTabId}`);
+    if (!mainTab) return;
+
+    // Deselect all sub-tabs
+    mainTab.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
+    Utils.getAllElements(`.sub-nav[data-parent-tab="${mainTabId}"] .sub-nav-item`).forEach(b => {
+      b.classList.remove('active');
+    });
+
+    // Select this sub-tab
+    const subContent = mainTab.querySelector(`[data-sub-tab="${subTabId}"]`);
+    if (subContent) subContent.classList.add('active');
+
+    const subBtn = Utils.getElement(`.sub-nav[data-parent-tab="${mainTabId}"] .sub-nav-item[data-sub-tab="${subTabId}"]`);
+    if (subBtn) subBtn.classList.add('active');
+
+    // Initialize sub-tab if needed
+    if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
+      Managers.servers.init();
+    } else if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
+      Managers.announcements.init();
+    }
+  }
+};
+
+// ============================================================================
+// Server Manager
+// ============================================================================
+
+const Managers = {
+  servers: {
+    container: null,
+    tabEl: null,
+
+    init() {
+      this.container = Utils.getElement('#portal-battlemetrics-grid');
+      this.tabEl = Utils.getElement('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
+      if (!this.container || !this.tabEl || this.tabEl.dataset.initialized) return;
+      
+      this.tabEl.dataset.initialized = 'true';
+      this.load();
+      this.wireAddServerButton();
+    },
+
+    wireAddServerButton() {
+      const btn = Utils.getElement('#add-server-btn');
+      if (!btn) return;
+
+      btn.addEventListener('click', () => this.openModal());
+
+      const modal = Utils.getElement('#add-server-modal');
+      const form = Utils.getElement('#add-server-form');
+      const closeBtn = Utils.getElement('#close-modal');
+      const cancelBtn = Utils.getElement('#cancel-add-server');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());
+      if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeModal();
+        });
+      }
+
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleFormSubmit();
+        });
+      }
+    },
+
+    openModal() {
+      const modal = Utils.getElement('#add-server-modal');
+      if (modal) modal.classList.add('active');
+    },
+
+    closeModal() {
+      const modal = Utils.getElement('#add-server-modal');
+      if (modal) modal.classList.remove('active');
+      const form = Utils.getElement('#add-server-form');
+      if (form) form.reset();
+      this.clearError();
+    },
+
+    async handleFormSubmit() {
+      const input = Utils.getElement('#battlemetrics-id');
+      const bmId = input?.value?.trim() || '';
+
+      if (!bmId) {
+        this.setError('BattleMetrics ID is required.');
+        input?.focus();
+        return;
+      }
+
+      this.clearError();
+      const btn = Utils.getElement('#add-server-form button[type="submit"]');
+      Utils.setLoading(btn, true);
+
+      try {
+        await API.saveServer(bmId);
+        this.closeModal();
+        await this.load();
+      } catch (error) {
+        console.error('Failed to add server:', error);
+        this.setError(error.message);
+      } finally {
+        Utils.setLoading(btn, false);
+      }
+    },
+
+    async load() {
+      if (!this.container || !this.tabEl) return;
+
+      this.container.innerHTML = '<p class="bm-empty-state">Loading servers...</p>';
+
+      try {
+        const data = await API.listServers();
+        State.setServers(data);
+        this.renderList(data);
+        this.renderCards(data);
+      } catch (error) {
+        console.error('Failed to load servers:', error);
+        this.container.innerHTML = '<p class="bm-empty-state">Unable to load servers.</p>';
+      }
+    },
+
+    renderList(servers) {
+      if (!this.tabEl) return;
+
+      if (!Array.isArray(servers) || servers.length === 0) {
+        this.tabEl.innerHTML = '<p style="color: #cccccc;">No servers configured yet.</p>';
+        return;
+      }
+
+      let html = '<div class="servers-list">';
+      servers.forEach(s => {
+        html += `
+          <div class="server-card">
+            <h3>${Utils.escapeHtml(s.display_name || 'Unknown')}</h3>
+            <p><strong>BattleMetrics ID:</strong> ${Utils.escapeHtml(s.battlemetrics_id || 'N/A')}</p>
+            <button class="btn-danger delete-server" data-id="${s.id}">Delete</button>
+          </div>
+        `;
+      });
+      html += '</div>';
+      this.tabEl.innerHTML = html;
+
+      this.tabEl.querySelectorAll('.delete-server').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id, 10);
+          if (!Number.isNaN(id)) await this.handleDelete(id);
+        });
+      });
+    },
+
+    renderCards(servers) {
+      if (!this.container || !window.Battlemetrics) return;
+      const normalized = servers.map(Utils.normalizeServer);
+      window.Battlemetrics.renderCards(this.container, normalized);
+    },
+
+    async handleDelete(id) {
+      if (!window.confirm('Remove this server from the portal?')) return;
+
+      try {
+        await API.deleteServer(id);
+        await this.load();
+      } catch (error) {
+        console.error('Failed to delete server:', error);
+        alert(error.message);
+      }
+    },
+
+    setError(msg) {
+      const el = Utils.getElement('#add-server-error');
+      if (el) {
+        el.textContent = msg;
+        el.classList.add('active');
+      }
+    },
+
+    clearError() {
+      const el = Utils.getElement('#add-server-error');
+      if (el) {
+        el.textContent = '';
+        el.classList.remove('active');
+      }
+    }
+  },
+
+  // ========================================================================
+  // Announcements Manager
+  // ========================================================================
+
+  announcements: {
+    tabEl: null,
+
+    init() {
+      this.tabEl = Utils.getElement('#manage-content .sub-tab-content[data-sub-tab="server-announcements"]');
+      if (!this.tabEl || this.tabEl.dataset.initialized) return;
+
+      this.tabEl.dataset.initialized = 'true';
+      this.render();
+    },
+
+    render() {
+      if (!this.tabEl) return;
+
+      this.tabEl.innerHTML = `
+        <div style="margin-bottom: 2rem;">
+          <button class="btn-primary" id="announcement-add-btn" type="button">
+            <i class="fas fa-plus"></i> New Announcement
+          </button>
+        </div>
+        <div class="announce-list-wrapper">
+          <h3 style="margin-bottom: 1rem; color: #ffffff;">Existing Announcements</h3>
+          <div id="announcements-list"></div>
+        </div>
+      `;
+
+      const addBtn = this.tabEl.querySelector('#announcement-add-btn');
+      if (addBtn) addBtn.addEventListener('click', () => this.openModal());
+
+      this.load();
+    },
+
+    openModal() {
+      let modal = Utils.getElement('#add-announcement-modal');
+      if (!modal) modal = this.createModal();
+
+      const serverSelect = Utils.getElement('#announcement-server');
+      if (serverSelect) {
+        serverSelect.innerHTML = '<option value="">All Servers</option>';
+        State.servers.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = Utils.escapeHtml(s.display_name || 'Server');
+          serverSelect.appendChild(opt);
+        });
+      }
+
+      const form = Utils.getElement('#add-announcement-form');
+      if (form) form.reset();
+
+      this.clearError();
+      modal.classList.add('active');
+    },
+
+    closeModal() {
+      const modal = Utils.getElement('#add-announcement-modal');
+      if (modal) modal.classList.remove('active');
+      const form = Utils.getElement('#add-announcement-form');
+      if (form) form.reset();
+      this.clearError();
+    },
+
+    createModal() {
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'add-announcement-modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>New Announcement</h2>
+            <button class="modal-close" type="button" id="close-add-announcement-modal">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="add-announcement-form">
+              <div class="form-group">
+                <label for="announcement-message">Message</label>
+                <textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="announcement-severity">Severity</label>
+                  <select id="announcement-severity" class="form-input">
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="announcement-server">Target Server</label>
+                  <select id="announcement-server" class="form-input">
+                    <option value="">All Servers</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="announcement-start">Starts At (optional)</label>
+                  <input type="datetime-local" id="announcement-start" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label for="announcement-end">Ends At (optional)</label>
+                  <input type="datetime-local" id="announcement-end" class="form-input" />
+                </div>
+              </div>
+
+              <p class="form-error" id="add-announcement-error" role="alert" aria-live="assertive"></p>
+
+              <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cancel-add-announcement">Cancel</button>
+                <button type="submit" class="btn-primary">Create Announcement</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const closeBtn = modal.querySelector('#close-add-announcement-modal');
+      const cancelBtn = modal.querySelector('#cancel-add-announcement');
+      const form = modal.querySelector('#add-announcement-form');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());
+      if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeModal());
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleFormSubmit();
+        });
+      }
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.closeModal();
+      });
+
+      return modal;
+    },
+
+    async handleFormSubmit() {
+      const msgEl = Utils.getElement('#announcement-message');
+      const msg = msgEl?.value?.trim() || '';
+
+      if (!msg) {
+        this.setError('Message is required.');
+        return;
+      }
+
+      this.clearError();
+      const btn = Utils.getElement('#add-announcement-form button[type="submit"]');
+      Utils.setLoading(btn, true);
+
+      try {
+        const payload = {
+          message: msg,
+          severity: Utils.getElement('#announcement-severity')?.value || 'info',
+          serverId: Utils.getElement('#announcement-server')?.value || null,
+          startsAt: Utils.getElement('#announcement-start')?.value || '',
+          endsAt: Utils.getElement('#announcement-end')?.value || '',
+          isActive: 1
+        };
+
+        await API.saveAnnouncement(payload);
+        this.closeModal();
+        await this.load();
+      } catch (error) {
+        console.error('Failed to save announcement:', error);
+        this.setError(error.message);
+      } finally {
+        Utils.setLoading(btn, false);
+      }
+    },
+
+    async load() {
+      const listEl = Utils.getElement('#announcements-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = '<p style="color: #cccccc;">Loading announcements...</p>';
+
+      try {
+        const data = await API.listAnnouncements(0);
+        this.renderList(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load announcements:', error);
+        listEl.innerHTML = '<p style="color: #ff6b6b;">Unable to load announcements.</p>';
+      }
+    },
+
+    renderList(announcements) {
+      const listEl = Utils.getElement('#announcements-list');
+      if (!listEl) return;
+
+      if (announcements.length === 0) {
+        listEl.innerHTML = '<p style="color: #cccccc;">No announcements yet.</p>';
+        return;
+      }
+
+      let html = '<div class="announcements-list">';
+      announcements.forEach(a => {
+        html += `
+          <div class="announcement-card">
+            <div class="announcement-main">
+              <div class="announcement-header">
+                <span class="badge badge-${a.severity}">${a.severity.toUpperCase()}</span>
+                <span class="announcement-target">${Utils.escapeHtml(a.server_name || 'All Servers')}</span>
+                <span class="announcement-status">${Number(a.is_active) === 1 ? 'Active' : 'Inactive'}</span>
+              </div>
+              <p class="announcement-message">${Utils.escapeHtml(a.message || '')}</p>
+              <div class="announcement-schedule">
+                <span><strong>Starts:</strong> ${a.starts_at ? Utils.escapeHtml(a.starts_at) : 'Immediate'}</span>
+                <span><strong>Ends:</strong> ${a.ends_at ? Utils.escapeHtml(a.ends_at) : 'Open-ended'}</span>
+              </div>
+            </div>
+            <div class="announcement-actions">
+              <button class="btn-danger delete-announcement" data-id="${a.id}">Delete</button>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      listEl.innerHTML = html;
+
+      listEl.querySelectorAll('.delete-announcement').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id, 10);
+          if (!Number.isNaN(id)) await this.handleDelete(id);
+        });
+      });
+    },
+
+    async handleDelete(id) {
+      if (!window.confirm('Delete this announcement?')) return;
+
+      try {
+        await API.deleteAnnouncement(id);
+        await this.load();
+      } catch (error) {
+        console.error('Failed to delete announcement:', error);
+        alert(error.message);
+      }
+    },
+
+    setError(msg) {
+      const el = Utils.getElement('#add-announcement-error');
+      if (el) {
+        el.textContent = msg;
+        el.classList.add('active');
+      }
+    },
+
+    clearError() {
+      const el = Utils.getElement('#add-announcement-error');
+      if (el) {
+        el.textContent = '';
+        el.classList.remove('active');
+      }
+    }
+  },
+
+  // ========================================================================
+  // User Management (Manage Access)
+  // ========================================================================
+
+  manageAccess: {
+    tabEl: null,
+
+    init() {
+      this.tabEl = Utils.getElement('#manage-access');
+      if (!this.tabEl || this.tabEl.dataset.initialized) return;
+
+      this.tabEl.dataset.initialized = 'true';
+      this.wireButtons();
+      this.setupAddUserModal();
+      this.load();
+    },
+
+    wireButtons() {
+      const viewBtn = this.tabEl?.querySelector('#view-accounts-btn');
+      const addBtn = this.tabEl?.querySelector('#add-user-btn');
+
+      if (viewBtn) {
+        viewBtn.addEventListener('click', () => {
+          this.tabEl?.querySelector('#accounts-section')?.scrollIntoView({ behavior: 'smooth' });
+          this.load();
+        });
+      }
+
+      if (addBtn) {
+        addBtn.addEventListener('click', () => this.openAddUserModal());
+      }
+    },
+
+    setupAddUserModal() {
+      const modal = Utils.getElement('#add-user-modal');
+      const form = Utils.getElement('#add-user-form');
+      const closeBtn = Utils.getElement('#close-add-user-modal');
+      const cancelBtn = Utils.getElement('#cancel-add-user');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeAddUserModal());
+      if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeAddUserModal());
+
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeAddUserModal();
+        });
+      }
+
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleAddUserSubmit();
+        });
+      }
+    },
+
+    openAddUserModal() {
+      const modal = Utils.getElement('#add-user-modal');
+      if (modal) modal.classList.add('active');
+    },
+
+    closeAddUserModal() {
+      const modal = Utils.getElement('#add-user-modal');
+      if (modal) modal.classList.remove('active');
+      const form = Utils.getElement('#add-user-form');
+      if (form) form.reset();
+      this.clearAddUserError();
+    },
+
+    async handleAddUserSubmit() {
+      const nameEl = Utils.getElement('#user-name');
+      const passEl = Utils.getElement('#user-password');
+      const name = nameEl?.value?.trim() || '';
+      const password = passEl?.value || '';
+
+      if (!name || !password) {
+        this.setAddUserError('Username and password are required.');
+        return;
+      }
+
+      this.clearAddUserError();
+      const btn = Utils.getElement('#add-user-form button[type="submit"]');
+      Utils.setLoading(btn, true);
+
+      try {
+        await API.addUser(name, password);
+        this.closeAddUserModal();
+        await this.load();
+      } catch (error) {
+        console.error('Failed to add user:', error);
+        this.setAddUserError(error.message);
+      } finally {
+        Utils.setLoading(btn, false);
+      }
+    },
+
+    async load() {
+      const section = this.tabEl?.querySelector('#accounts-section');
+      if (!section) return;
+
+      section.innerHTML = '<p style="color: #cccccc;">Loading users...</p>';
+
+      try {
+        const data = await API.listUsers();
+        this.renderUsers(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load users:', error);
+        section.innerHTML = '<p style="color: #ff6b6b;">Unable to load users.</p>';
+      }
+    },
+
+    renderUsers(users) {
+      const section = this.tabEl?.querySelector('#accounts-section');
+      if (!section) return;
+
+      if (users.length === 0) {
+        section.innerHTML = '<p style="color: #cccccc;">No users found.</p>';
+        return;
+      }
+
+      let html = '<div class="users-list">';
+      users.forEach(u => {
+        const active = Number(u.is_active) === 1;
+        html += `
+          <div class="user-row">
+            <div class="user-main">
+              <strong>${Utils.escapeHtml(u.name || '')}</strong>
+              <span class="user-role">${Utils.escapeHtml(u.role || 'admin')}</span>
+              <span class="user-status">${active ? 'Active' : 'Inactive'}</span>
+            </div>
+            <div class="user-actions">
+              <button class="btn-secondary reset-pass" data-id="${u.id}">Reset Password</button>
+              ${active ? `<button class="btn-danger deactivate-user" data-id="${u.id}">Deactivate</button>` : `<button class="btn-primary reactivate-user" data-id="${u.id}">Reactivate</button>`}
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      section.innerHTML = html;
+
+      // Wire up action buttons
+      section.querySelectorAll('.reset-pass').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id, 10);
+          const newPass = window.prompt('Enter new password:');
+          if (!newPass) return;
+          try {
+            await API.resetUserPassword(id, newPass);
+            alert('Password updated.');
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+      });
+
+      section.querySelectorAll('.deactivate-user').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id, 10);
+          if (!window.confirm('Deactivate this user?')) return;
+          try {
+            await API.deactivateUser(id);
+            await this.load();
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+      });
+
+      section.querySelectorAll('.reactivate-user').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.dataset.id, 10);
+          try {
+            await API.reactivateUser(id);
+            await this.load();
+          } catch (error) {
+            alert(error.message);
+          }
+        });
+      });
+    },
+
+    setAddUserError(msg) {
+      const el = Utils.getElement('#add-user-error');
+      if (el) {
+        el.textContent = msg;
+        el.classList.add('active');
+      }
+    },
+
+    clearAddUserError() {
+      const el = Utils.getElement('#add-user-error');
+      if (el) {
+        el.textContent = '';
+        el.classList.remove('active');
+      }
+    }
+  }
+};
+
+// ============================================================================
+// Application Initialization
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', async function() {
+  // Hide portal until auth verified
+  const portalRoot = Utils.getElement('#portal-root');
+  if (portalRoot) Utils.hide(portalRoot);
+
+  // Check authentication
+  const auth = await Auth.check();
+  if (!auth) return;
+
+  // Apply role-based visibility
+  Auth.applyRoleVisibility(auth.role);
+
+  // Insert welcome message
+  Auth.insertWelcome(auth);
+
+  // Hide loading screen
+  const loadingScreen = Utils.getElement('#auth-loading');
+  if (loadingScreen) Utils.hide(loadingScreen);
+
+  // Show portal
+  if (portalRoot) Utils.show(portalRoot);
+
+  // Initialize navigation
+  Nav.init();
+
+  // Load initial servers (for announcements/cards)
+  try {
+    const servers = await API.listServers();
+    State.setServers(servers);
+  } catch (error) {
+    console.error('Failed to load initial servers:', error);
+  }
+});

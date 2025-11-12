@@ -36,22 +36,8 @@ if ($name === '' || $password === '') {
 
 require_once __DIR__ . '/dbconnect.php';
 
-// Ensure users table exists
-$createSql = "
-	CREATE TABLE IF NOT EXISTS users (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		name VARCHAR(100) NOT NULL UNIQUE,
-		password_hash VARCHAR(255) NOT NULL,
-		role VARCHAR(32) NOT NULL DEFAULT 'admin',
-		is_active TINYINT(1) NOT NULL DEFAULT 1,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		INDEX idx_is_active (is_active)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-";
-$conn->query($createSql);
-
-$stmt = $conn->prepare("SELECT id, name, password_hash, is_active FROM users WHERE name = ? LIMIT 1");
+// Fetch user from database
+$stmt = $conn->prepare("SELECT id, name, password_hash, role, is_active FROM users WHERE name = ? LIMIT 1");
 if (!$stmt) {
 	http_response_code(500);
 	echo json_encode(['success' => false, 'message' => 'Unable to process request.']);
@@ -71,9 +57,11 @@ if (!$user || (int)$user['is_active'] !== 1 || !password_verify($password, $user
 	exit;
 }
 
+// Authenticated — create session
 session_regenerate_id(true);
 $_SESSION['user_id'] = (int)$user['id'];
 $_SESSION['user_name'] = $user['name'];
+$_SESSION['user_role'] = $user['role'];
 
 $conn->close();
 
