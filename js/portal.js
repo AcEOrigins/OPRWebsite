@@ -8,15 +8,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const ourServersTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
 	const announcementsTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="server-announcements"]');
     const addServerError = document.getElementById('add-server-error');
+	const manageAccessTab = document.getElementById('manage-access');
 
-    const API_ENDPOINTS = {
-        list: 'Api/getServers.php',
-        add: 'Api/saveServer.php',
-		remove: 'Api/deleteServer.php',
-		listAnnouncements: 'Api/getAnnouncements.php',
-		addAnnouncement: 'Api/saveAnnouncement.php',
-		deleteAnnouncement: 'Api/deleteAnnouncement.php'
-    };
+	const API_ENDPOINTS = {
+		list: 'getServers.php',
+		add: 'saveServer.php',
+		remove: 'deleteServer.php',
+		listAnnouncements: 'getAnnouncements.php',
+		addAnnouncement: 'saveAnnouncement.php',
+		deleteAnnouncement: 'deleteAnnouncement.php',
+		listUsers: 'listUsers.php',
+		addUser: 'addUser.php',
+		deactivateUser: 'deactivateUser.php',
+		reactivateUser: 'reactivateUser.php',
+		resetUserPassword: 'resetUserPassword.php'
+	};
 
     let serversCache = [];
 
@@ -141,9 +147,15 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 updateAddServerButton(tabId, null);
             }
-        } else if (skipSubTabActivation) {
+		} else if (skipSubTabActivation) {
             updateAddServerButton(tabId, null);
         }
+
+		// Initialize Manage Access UI when switching to that tab
+		if (tabId === 'manage-access') {
+			ensureManageAccessUI();
+			loadUsers();
+		}
     }
 
     function getDefaultSubTab(tabId) {
@@ -180,7 +192,6 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Initialize dynamic UIs on demand
 		if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
 			ensureAnnouncementsUI();
-			loadAnnouncementsManagement();
 		}
     }
 
@@ -462,111 +473,447 @@ document.addEventListener('DOMContentLoaded', function() {
 		announcementsTab.dataset.announcementsInit = 'true';
 	}
 
+	// =============================
+	// Manage Access (Users)
+	// =============================
+	function ensureManageAccessUI() {
+		if (!manageAccessTab) return;
+		if (manageAccessTab.dataset.accountsInit === 'true') return;
+
+		const viewBtn = manageAccessTab.querySelector('#view-accounts-btn');
+		const addBtn = manageAccessTab.querySelector('#add-user-btn');
+		const section = manageAccessTab.querySelector('#accounts-section');
+
+		if (viewBtn) {
+			viewBtn.addEventListener('click', () => {
+				section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				loadUsers();
+			});
+		}
+
+		if (addBtn) {
+			addBtn.addEventListener('click', openAddUserModal);
+		}
+
+		manageAccessTab.dataset.accountsInit = 'true';
+	}
+
+	async function loadUsers() {
+		if (!manageAccessTab) return;
+		const section = manageAccessTab.querySelector('#accounts-section');
+		if (!section) return;
+
+		section.innerHTML = '<p style="color: #cccccc;">Loading users...</p>';
+		try {
+			const response = await fetch(API_ENDPOINTS.listUsers, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+			if (!response.ok) {
+				throw new Error(`Request failed with status ${response.status}`);
+			}
+			const users = await response.json();
+			renderUsersList(Array.isArray(users) ? users : []);
+		} catch (error) {
+			console.error('Failed to load users:', error);
+			section.innerHTML = '<p style="color:#ff6b6b;">Unable to load users.</p>';
+		}
+	}
+
+	function renderUsersList(users) {
+		if (!manageAccessTab) return;
+		const section = manageAccessTab.querySelector('#accounts-section');
+		if (!section) return;
+
+		if (!Array.isArray(users) || users.length === 0) {
+			section.innerHTML = '<p style="color: #cccccc;">No users found.</p>';
+			return;
+		}
+
+		let html = '<div class="users-list">';
+		users.forEach(u => {
+			const id = Number(u.id) || 0;
+			const name = escapeHtml(u.name || '');
+			const role = escapeHtml(u.role || 'admin');
+			const active = Number(u.is_active) === 1;
+			const status = active ? 'Active' : 'Inactive';
+
+			html += `
+				<div class="user-row">
+					<div class="user-main">
+						<strong>${name}</strong>
+						<span class="user-role">${role}</span>
+						<span class="user-status">${status}</span>
+					</div>
+					<div class="user-actions">
+						<button class="btn-secondary reset-pass" data-id="${id}">Reset Password</button>
+						${active
+							? `<button class="btn-danger deactivate-user" data-id="${id}">Deactivate</button>`
+							: `<button class="btn-primary reactivate-user" data-id="${id}">Reactivate</button>`
+						}
+					</div>
+				</div>
+			`;
+		});
+		html += '</div>';
+
+		section.innerHTML = html;
+
+		section.querySelectorAll('.deactivate-user').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const id = parseInt(btn.getAttribute('data-id'), 10);
+				if (Number.isNaN(id)) return;
+				const confirmed = window.confirm('Deactivate this user?');
+				if (!confirmed) return;
+				try {
+					await fetchJsonOk(API_ENDPOINTS.deactivateUser, { id });
+					await loadUsers();
+				} catch (err) {
+					console.error('Failed to deactivate user:', err);
+					alert(err?.message || 'Unable to deactivate user.');
+				}
+			});
+		});
+
+		section.querySelectorAll('.reactivate-user').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const id = parseInt(btn.getAttribute('data-id'), 10);
+				if (Number.isNaN(id)) return;
+				try {
+					await fetchJsonOk(API_ENDPOINTS.reactivateUser, { id });
+					await loadUsers();
+				} catch (err) {
+					console.error('Failed to reactivate user:', err);
+					alert(err?.message || 'Unable to reactivate user.');
+				}
+			});
+		});
+
+		section.querySelectorAll('.reset-pass').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const id = parseInt(btn.getAttribute('data-id'), 10);
+				if (Number.isNaN(id)) return;
+				const newPass = window.prompt('Enter a new password:');
+				if (!newPass) return;
+				try {
+					await fetchJsonOk(API_ENDPOINTS.resetUserPassword, { id, password: newPass });
+					alert('Password updated.');
+				} catch (err) {
+					console.error('Failed to reset password:', err);
+					alert(err?.message || 'Unable to reset password.');
+				}
+			});
+		});
+	}
+
+	function openAddUserModal() {
+		const modal = document.getElementById('add-user-modal');
+		if (!modal) return;
+		modal.classList.add('active');
+	}
+
+	// Add User modal behavior
+	const addUserModal = document.getElementById('add-user-modal');
+	const closeAddUserModalBtn = document.getElementById('close-add-user-modal');
+	const cancelAddUserBtn = document.getElementById('cancel-add-user');
+	const addUserForm = document.getElementById('add-user-form');
+	const addUserError = document.getElementById('add-user-error');
+
+	function closeAddUserModal() {
+		if (!addUserModal) return;
+		addUserModal.classList.remove('active');
+		if (addUserForm) addUserForm.reset();
+		if (addUserError) {
+			addUserError.textContent = '';
+			addUserError.classList.remove('active');
+		}
+	}
+
+	if (closeAddUserModalBtn) {
+		closeAddUserModalBtn.addEventListener('click', closeAddUserModal);
+	}
+	if (cancelAddUserBtn) {
+		cancelAddUserBtn.addEventListener('click', closeAddUserModal);
+	}
+	if (addUserModal) {
+		addUserModal.addEventListener('click', (e) => {
+			if (e.target === addUserModal) {
+				closeAddUserModal();
+			}
+		});
+	}
+	if (addUserForm) {
+		addUserForm.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const nameEl = document.getElementById('user-name');
+			const passEl = document.getElementById('user-password');
+			const name = (nameEl?.value || '').trim();
+			const password = passEl?.value || '';
+			if (!name || !password) {
+				if (addUserError) {
+					addUserError.textContent = 'Username and password are required.';
+					addUserError.classList.add('active');
+				}
+				return;
+			}
+			if (addUserError) {
+				addUserError.textContent = '';
+				addUserError.classList.remove('active');
+			}
+
+			setAddUserSubmitting(true);
+			try {
+				await fetchJsonOk(API_ENDPOINTS.addUser, { name, password });
+				closeAddUserModal();
+				await loadUsers();
+			} catch (err) {
+				console.error('Failed to add user:', err);
+				if (addUserError) {
+					addUserError.textContent = err?.message || 'Unable to add user.';
+					addUserError.classList.add('active');
+				}
+			} finally {
+				setAddUserSubmitting(false);
+			}
+		});
+	}
+
+	function setAddUserSubmitting(isSubmitting) {
+		if (!addUserForm) return;
+		addUserForm.querySelectorAll('input, button').forEach(el => {
+			el.disabled = isSubmitting;
+		});
+	}
+
+	async function fetchJsonOk(url, payload) {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+			body: JSON.stringify(payload || {})
+		});
+		const result = await response.json().catch(() => ({}));
+		if (!response.ok || result.success === false) {
+			throw new Error(result.message || `Request failed (${response.status})`);
+		}
+		return result;
+	}
+
 	function renderAnnouncementsUI() {
 		if (!announcementsTab) {
 			return;
 		}
 
-		const serverOptions = Array.isArray(serversCache) && serversCache.length > 0
-			? serversCache.map(s => `<option value="${Number(s.id) || 0}">${escapeHtml(s.display_name || s.displayName || 'Server')}</option>`).join('')
-			: '';
-
 		announcementsTab.innerHTML = `
-			<div class="announce-form-wrapper">
-				<form id="announcement-form" class="announce-form">
-					<div class="form-group">
-						<label for="announcement-message">Message</label>
-						<textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
-					</div>
-
-					<div class="form-row">
-						<div class="form-group">
-							<label for="announcement-severity">Severity</label>
-							<select id="announcement-severity" class="form-input">
-								<option value="info">Info</option>
-								<option value="success">Success</option>
-								<option value="warning">Warning</option>
-								<option value="error">Error</option>
-							</select>
-						</div>
-						<div class="form-group">
-							<label for="announcement-server">Target Server</label>
-							<select id="announcement-server" class="form-input">
-								<option value="">All Servers</option>
-								${serverOptions}
-							</select>
-						</div>
-					</div>
-
-					<div class="form-row">
-						<div class="form-group">
-							<label for="announcement-start">Starts At (optional)</label>
-							<input type="datetime-local" id="announcement-start" class="form-input" />
-						</div>
-						<div class="form-group">
-							<label for="announcement-end">Ends At (optional)</label>
-							<input type="datetime-local" id="announcement-end" class="form-input" />
-						</div>
-					</div>
-
-					<p class="form-error" id="announcement-error" role="alert" aria-live="assertive"></p>
-
-					<div class="form-actions">
-						<button type="submit" class="btn-primary">Send Announcement</button>
-					</div>
-				</form>
+			<div style="margin-bottom: 2rem;">
+				<button class="btn-primary" type="button" id="add-announcement-btn">
+					<i class="fas fa-plus"></i> New Announcement
+				</button>
 			</div>
 
 			<div class="announce-list-wrapper">
-				<h3 style="margin-top: 24px;">Existing Announcements</h3>
+				<h3 style="margin-bottom: 1rem; color: #ffffff;">Existing Announcements</h3>
 				<div id="announcements-list"></div>
 			</div>
 		`;
 
-		const form = announcementsTab.querySelector('#announcement-form');
-		if (form) {
-			form.addEventListener('submit', async (e) => {
+		// Wire up button to open modal
+		const addBtn = announcementsTab.querySelector('#add-announcement-btn');
+		if (addBtn) {
+			addBtn.addEventListener('click', (e) => {
 				e.preventDefault();
-
-				const messageEl = announcementsTab.querySelector('#announcement-message');
-				const severityEl = announcementsTab.querySelector('#announcement-severity');
-				const serverEl = announcementsTab.querySelector('#announcement-server');
-				const startEl = announcementsTab.querySelector('#announcement-start');
-				const endEl = announcementsTab.querySelector('#announcement-end');
-
-				const payload = {
-					message: (messageEl?.value || '').trim(),
-					severity: (severityEl?.value || 'info'),
-					serverId: (serverEl?.value || '') === '' ? null : Number(serverEl.value),
-					startsAt: startEl?.value || '',
-					endsAt: endEl?.value || '',
-					isActive: 1
-				};
-
-				if (!payload.message) {
-					return setAnnouncementError('Message is required.');
-				}
-
-				setAnnouncementError('');
-				setAnnouncementFormSubmitting(true);
-				try {
-					await addAnnouncement(payload);
-					// Reset form and reload list
-					form.reset();
-					await loadAnnouncementsManagement();
-				} catch (err) {
-					console.error('Failed to save announcement:', err);
-					setAnnouncementError(err?.message || 'Unable to save announcement.');
-				} finally {
-					setAnnouncementFormSubmitting(false);
-				}
+				e.stopPropagation();
+				openAnnouncementModal();
 			});
+		}
+
+		// Load existing announcements
+		loadAnnouncementsManagement();
+	}
+
+	function openAnnouncementModal() {
+		let modal = document.getElementById('add-announcement-modal');
+
+		// If the modal markup is missing for any reason, create it on the fly
+		if (!modal) {
+			modal = createAnnouncementModal();
+		}
+
+		// Populate server dropdown
+		const serverSelect = document.getElementById('announcement-server');
+		if (serverSelect && Array.isArray(serversCache)) {
+			serverSelect.innerHTML = '<option value="">All Servers</option>';
+			serversCache.forEach(s => {
+				const option = document.createElement('option');
+				option.value = Number(s.id) || 0;
+				option.textContent = escapeHtml(s.display_name || s.displayName || 'Server');
+				serverSelect.appendChild(option);
+			});
+		}
+
+		// Reset form
+		const form = document.getElementById('add-announcement-form');
+		if (form) {
+			form.reset();
+		}
+
+		// Clear error
+		const errorEl = document.getElementById('add-announcement-error');
+		if (errorEl) {
+			errorEl.textContent = '';
+			errorEl.classList.remove('active');
+		}
+
+		// Show modal
+		modal.classList.add('active');
+		// Hard fallback in case CSS isn't applied yet (e.g. caching or dev server quirks)
+		modal.style.display = 'flex';
+	}
+
+	function closeAnnouncementModal() {
+		const modal = document.getElementById('add-announcement-modal');
+		if (modal) {
+			modal.classList.remove('active');
+			modal.style.display = ''; // revert any hard fallback
+		}
+		const form = document.getElementById('add-announcement-form');
+		if (form) {
+			form.reset();
+		}
+		const errorEl = document.getElementById('add-announcement-error');
+		if (errorEl) {
+			errorEl.textContent = '';
+			errorEl.classList.remove('active');
 		}
 	}
 
+	function setupAnnouncementModal() {
+		const modal = document.getElementById('add-announcement-modal');
+		const form = document.getElementById('add-announcement-form');
+		const closeBtn = document.getElementById('close-add-announcement-modal');
+		const cancelBtn = document.getElementById('cancel-add-announcement');
+
+		if (!modal || !form) return;
+
+		// Close modal handlers
+		if (closeBtn) {
+			closeBtn.addEventListener('click', closeAnnouncementModal);
+		}
+		if (cancelBtn) {
+			cancelBtn.addEventListener('click', closeAnnouncementModal);
+		}
+
+		// Close on overlay click
+		modal.addEventListener('click', (e) => {
+			if (e.target === modal) {
+				closeAnnouncementModal();
+			}
+		});
+
+		// Form submission
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+
+			const messageEl = document.getElementById('announcement-message');
+			const severityEl = document.getElementById('announcement-severity');
+			const serverEl = document.getElementById('announcement-server');
+			const startEl = document.getElementById('announcement-start');
+			const endEl = document.getElementById('announcement-end');
+
+			const payload = {
+				message: (messageEl?.value || '').trim(),
+				severity: (severityEl?.value || 'info'),
+				serverId: (serverEl?.value || '') === '' ? null : Number(serverEl.value),
+				startsAt: startEl?.value || '',
+				endsAt: endEl?.value || '',
+				isActive: 1
+			};
+
+			if (!payload.message) {
+				return setAnnouncementError('Message is required.');
+			}
+
+			setAnnouncementError('');
+			setAnnouncementFormSubmitting(true);
+			try {
+				await addAnnouncement(payload);
+				closeAnnouncementModal();
+				await loadAnnouncementsManagement();
+			} catch (err) {
+				console.error('Failed to save announcement:', err);
+				setAnnouncementError(err?.message || 'Unable to save announcement.');
+			} finally {
+				setAnnouncementFormSubmitting(false);
+			}
+		});
+	}
+
+	// Creates the announcement modal dynamically when missing
+	function createAnnouncementModal() {
+		const overlay = document.createElement('div');
+		overlay.className = 'modal-overlay active';
+		overlay.id = 'add-announcement-modal';
+		overlay.style.display = 'flex'; // ensure visible even if CSS isn't loaded yet
+
+		overlay.innerHTML = `
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2>New Announcement</h2>
+					<button class="modal-close" id="close-add-announcement-modal">
+						<i class="fas fa-times"></i>
+					</button>
+				</div>
+				<div class="modal-body">
+					<form id="add-announcement-form">
+						<div class="form-group">
+							<label for="announcement-message">Message</label>
+							<textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label for="announcement-severity">Severity</label>
+								<select id="announcement-severity" class="form-input">
+									<option value="info">Info</option>
+									<option value="success">Success</option>
+									<option value="warning">Warning</option>
+									<option value="error">Error</option>
+								</select>
+							</div>
+							<div class="form-group">
+								<label for="announcement-server">Target Server</label>
+								<select id="announcement-server" class="form-input">
+									<option value="">All Servers</option>
+								</select>
+							</div>
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label for="announcement-start">Starts At (optional)</label>
+								<input type="datetime-local" id="announcement-start" class="form-input" />
+							</div>
+							<div class="form-group">
+								<label for="announcement-end">Ends At (optional)</label>
+								<input type="datetime-local" id="announcement-end" class="form-input" />
+							</div>
+						</div>
+
+						<p class="form-error" id="add-announcement-error" role="alert" aria-live="assertive"></p>
+
+						<div class="modal-actions">
+							<button type="button" class="btn-secondary" id="cancel-add-announcement">Cancel</button>
+							<button type="submit" class="btn-primary">Create Announcement</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		`;
+
+		document.body.appendChild(overlay);
+		// Wire up handlers for the newly created DOM
+		setupAnnouncementModal();
+		return overlay;
+	}
+
 	function setAnnouncementFormSubmitting(isSubmitting) {
-		if (!announcementsTab) return;
-		const form = announcementsTab.querySelector('#announcement-form');
+		const form = document.getElementById('add-announcement-form');
 		if (!form) return;
 		form.querySelectorAll('input, textarea, select, button').forEach(el => {
 			el.disabled = isSubmitting;
@@ -574,11 +921,10 @@ document.addEventListener('DOMContentLoaded', function() {
 	}
 
 	function setAnnouncementError(message) {
-		if (!announcementsTab) return;
-		const el = announcementsTab.querySelector('#announcement-error');
-		if (!el) return;
-		el.textContent = message || '';
-		el.classList.toggle('active', Boolean(message));
+		const errorEl = document.getElementById('add-announcement-error');
+		if (!errorEl) return;
+		errorEl.textContent = message || '';
+		errorEl.classList.toggle('active', Boolean(message));
 	}
 
 	async function loadAnnouncementsManagement() {
@@ -702,6 +1048,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial load
     loadServers();
+	
+	// Setup announcement modal once on page load
+	setupAnnouncementModal();
 
     function getNavWrapper(tabId) {
         const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);

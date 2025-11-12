@@ -4,9 +4,27 @@
 // Returns active servers as JSON
 // =========================================
 
+header('Content-Type: application/json');
+
 require_once __DIR__ . '/dbconnect.php';
 
-header('Content-Type: application/json');
+// Ensure servers table exists
+$createTableSql = "
+    CREATE TABLE IF NOT EXISTS servers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        battlemetrics_id VARCHAR(50) NOT NULL UNIQUE,
+        display_name VARCHAR(255) NOT NULL,
+        game_title VARCHAR(255) DEFAULT NULL,
+        region VARCHAR(100) DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_is_active (is_active),
+        INDEX idx_sort_order (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+";
+@$conn->query($createTableSql);
 
 $sql = "SELECT id, battlemetrics_id, display_name, game_title, region
         FROM servers

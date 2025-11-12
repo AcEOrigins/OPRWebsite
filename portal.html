@@ -98,7 +98,7 @@
                                 <h3>Account Directory</h3>
                             </div>
                             <p>Review current users with portal access, reset passwords, or deactivate accounts that are no longer needed.</p>
-                            <button class="btn-primary" type="button" disabled>View Accounts</button>
+							<button class="btn-primary" type="button" id="view-accounts-btn">View Accounts</button>
                         </div>
                         <div class="access-card">
                             <div class="access-card-header">
@@ -106,7 +106,7 @@
                                 <h3>Add New User</h3>
                             </div>
                             <p>Onboard new staff by creating secure credentials. Strong passwords are enforced to keep the portal protected.</p>
-                            <button class="btn-secondary" type="button" disabled>Add User</button>
+							<button class="btn-secondary" type="button" id="add-user-btn">Add User</button>
                         </div>
                         <div class="access-card">
                             <div class="access-card-header">
@@ -117,6 +117,8 @@
                             <button class="btn-secondary" type="button" disabled>Manage Policies</button>
                         </div>
                     </div>
+
+					<div id="accounts-section"></div>
                 </div>
             </div>
 
@@ -154,6 +156,91 @@
                 </form>
             </div>
         </div>
+
+	<!-- Add User Modal -->
+	<div class="modal-overlay" id="add-user-modal">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h2>Add New User</h2>
+				<button class="modal-close" id="close-add-user-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<form id="add-user-form">
+					<div class="form-group">
+						<label for="user-name">Username</label>
+						<input type="text" id="user-name" class="form-input" placeholder="Enter username" required>
+					</div>
+					<div class="form-group">
+						<label for="user-password">Password</label>
+						<input type="password" id="user-password" class="form-input" placeholder="Enter password" required>
+					</div>
+					<p class="form-error" id="add-user-error" role="alert" aria-live="assertive"></p>
+					<div class="modal-actions">
+						<button type="button" class="btn-secondary" id="cancel-add-user">Cancel</button>
+						<button type="submit" class="btn-primary">Create User</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<!-- Add Announcement Modal -->
+	<div class="modal-overlay" id="add-announcement-modal">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h2>New Announcement</h2>
+				<button class="modal-close" id="close-add-announcement-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<form id="add-announcement-form">
+					<div class="form-group">
+						<label for="announcement-message">Message</label>
+						<textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="announcement-severity">Severity</label>
+							<select id="announcement-severity" class="form-input">
+								<option value="info">Info</option>
+								<option value="success">Success</option>
+								<option value="warning">Warning</option>
+								<option value="error">Error</option>
+							</select>
+						</div>
+						<div class="form-group">
+							<label for="announcement-server">Target Server</label>
+							<select id="announcement-server" class="form-input">
+								<option value="">All Servers</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="announcement-start">Starts At (optional)</label>
+							<input type="datetime-local" id="announcement-start" class="form-input" />
+						</div>
+						<div class="form-group">
+							<label for="announcement-end">Ends At (optional)</label>
+							<input type="datetime-local" id="announcement-end" class="form-input" />
+						</div>
+					</div>
+
+					<p class="form-error" id="add-announcement-error" role="alert" aria-live="assertive"></p>
+
+					<div class="modal-actions">
+						<button type="button" class="btn-secondary" id="cancel-add-announcement">Cancel</button>
+						<button type="submit" class="btn-primary">Create Announcement</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
     </div>
 
     <script src="js/battlemetrics.js"></script>

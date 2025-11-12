@@ -1,5 +1,5 @@
 (() => {
-    const API_ENDPOINT = 'Api/php/login.php';
+    const API_ENDPOINT = 'login.php';
     const REDIRECT_URL = 'portal.html';
     const LOADING_DELAY_MS = 1200;
 
