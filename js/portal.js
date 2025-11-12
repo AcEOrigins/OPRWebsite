@@ -1,5 +1,5 @@
 // Portal Navigation Functionality
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     const navItems = Array.from(document.querySelectorAll('.nav-item[data-tab]'));
     const navItemWrappers = Array.from(document.querySelectorAll('.nav-item-wrapper'));
     const tabContents = document.querySelectorAll('.tab-content');
@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	const announcementsTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="server-announcements"]');
     const addServerError = document.getElementById('add-server-error');
 	const manageAccessTab = document.getElementById('manage-access');
+	const portalRoot = document.getElementById('portal-root');
 
 	const API_ENDPOINTS = {
 		list: 'getServers.php',
@@ -21,10 +22,33 @@ document.addEventListener('DOMContentLoaded', function() {
 		addUser: 'addUser.php',
 		deactivateUser: 'deactivateUser.php',
 		reactivateUser: 'reactivateUser.php',
-		resetUserPassword: 'resetUserPassword.php'
+		resetUserPassword: 'resetUserPassword.php',
+		authCheck: 'auth_check.php'
 	};
 
     let serversCache = [];
+	let currentUser = null;
+
+	// Enforce authentication and apply role-based visibility
+	try {
+		const authRes = await fetch(API_ENDPOINTS.authCheck, { credentials: 'same-origin', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+		if (!authRes.ok) throw new Error(`HTTP ${authRes.status}`);
+		const auth = await authRes.json();
+		if (!auth || auth.authenticated !== true) {
+			window.location.href = 'portal_login.html';
+			return;
+		}
+		currentUser = auth;
+		applyRoleVisibility(auth);
+		insertWelcome(auth);
+		if (portalRoot) {
+			portalRoot.style.display = ''; // reveal UI only after auth
+		}
+	} catch (e) {
+		// If auth check fails, send to login
+		window.location.href = 'portal_login.html';
+		return;
+	}
 
     const tabTitles = {
         'dashboard': 'Dashboard',
@@ -471,6 +495,73 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		renderAnnouncementsUI();
 		announcementsTab.dataset.announcementsInit = 'true';
+	}
+
+	function applyRoleVisibility(auth) {
+		const role = (auth && auth.role || 'admin').toLowerCase();
+
+		// Helper to hide a nav item and its tab content
+		function hideTab(tabId) {
+			const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+			const wrapper = navItem ? navItem.closest('.nav-item-wrapper') : null;
+			if (wrapper) {
+				wrapper.style.display = 'none';
+			}
+			const tab = document.getElementById(tabId);
+			if (tab) {
+				tab.style.display = 'none';
+			}
+		}
+
+		if (role === 'owner') {
+			return; // no restrictions
+		}
+
+		if (role === 'admin') {
+			// Hide Manage Access
+			hideTab('manage-access');
+			return;
+		}
+
+		if (role === 'staff') {
+			// Hide Manage Access
+			hideTab('manage-access');
+
+			// Restrict Manage Site sub-tabs to only Server Announcements
+			if (Array.isArray(subTabsConfig['manage-content'])) {
+				subTabsConfig['manage-content'] = subTabsConfig['manage-content'].filter(st => st.id === 'server-announcements');
+			}
+
+			// Hide other top-level tabs if any (keep battlemetrics and manage-content)
+			const allowedTop = new Set(['manage-content', 'battlemetrics']);
+			document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+				const tabId = item.getAttribute('data-tab');
+				if (!allowedTop.has(tabId)) {
+					const wrap = item.closest('.nav-item-wrapper');
+					if (wrap) wrap.style.display = 'none';
+					const content = document.getElementById(tabId);
+					if (content) content.style.display = 'none';
+				}
+			});
+		}
+	}
+
+	function insertWelcome(auth) {
+		const navHeader = document.querySelector('.nav-header');
+		if (!navHeader) return;
+		const name = auth && auth.userName ? String(auth.userName) : '';
+		if (!name) return;
+		// Add or update a small welcome line
+		let welcome = navHeader.querySelector('.welcome-text');
+		if (!welcome) {
+			welcome = document.createElement('div');
+			welcome.className = 'welcome-text';
+			welcome.style.color = '#b9c2d0';
+			welcome.style.fontSize = '0.85rem';
+			welcome.style.marginLeft = 'auto';
+			navHeader.appendChild(welcome);
+		}
+		welcome.textContent = `Welcome ${name}`;
 	}
 
 	// =============================
