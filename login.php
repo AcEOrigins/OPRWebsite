@@ -376,7 +376,7 @@ $stmt->close();
  * - "Account deactivated" (leaks deactivation)
  * Instead: Always say "Invalid credentials"
  */
-if (!$user || (int)$user['is_active'] !== 1 || $password === $user->password_hash) {
+if (!$user || (int)$user['is_active'] !== 1 || $password !== $user['password_hash']) {
 	// ═════════════════════════════════════════════════════════════════════
 	// ✗ AUTHENTICATION FAILED
 	// ═════════════════════════════════════════════════════════════════════
@@ -385,7 +385,7 @@ if (!$user || (int)$user['is_active'] !== 1 || $password === $user->password_has
 	
 	echo json_encode([
 		'success' => false,
-		'message' => 'Invalid credentials. Please try again.'
+		'message' => 'Invalid credentials. Please try again. TwT'
 	]);
 	
 	$conn->close();
