@@ -6,12 +6,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const pageTitle = document.getElementById('page-title');
     const serverInfoContainer = document.getElementById('portal-battlemetrics-grid');
     const ourServersTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="our-servers"]');
+	const announcementsTab = document.querySelector('#manage-content .sub-tab-content[data-sub-tab="server-announcements"]');
     const addServerError = document.getElementById('add-server-error');
 
     const API_ENDPOINTS = {
-        list: 'Api/php/getServers.php',
-        add: 'Api/php/saveServer.php',
-        remove: 'Api/php/deleteServer.php'
+        list: 'Api/getServers.php',
+        add: 'Api/saveServer.php',
+		remove: 'Api/deleteServer.php',
+		listAnnouncements: 'Api/getAnnouncements.php',
+		addAnnouncement: 'Api/saveAnnouncement.php',
+		deleteAnnouncement: 'Api/deleteAnnouncement.php'
     };
 
     let serversCache = [];
@@ -33,7 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
             { id: 'server-info', label: 'Server Info' },
             { id: 'our-servers', label: 'Our Servers' },
             { id: 'footer', label: 'Footer' },
-            { id: 'navigation', label: 'Navigation' }
+			{ id: 'navigation', label: 'Navigation' },
+			{ id: 'server-announcements', label: 'Server Announcements' }
         ]
     };
 
@@ -171,6 +176,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         updateAddServerButton(mainTabId, subTabId);
+
+		// Initialize dynamic UIs on demand
+		if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
+			ensureAnnouncementsUI();
+			loadAnnouncementsManagement();
+		}
     }
 
     function updateAddServerButton(mainTabId, subTabId) {
@@ -435,6 +446,250 @@ document.addEventListener('DOMContentLoaded', function() {
         serverInfoContainer.classList.remove('bm-grid');
         serverInfoContainer.innerHTML = `<p class="bm-empty-state">${escapeHtml(message)}</p>`;
     }
+
+	// =============================
+	// Announcements Management UI
+	// =============================
+	function ensureAnnouncementsUI() {
+		if (!announcementsTab) {
+			return;
+		}
+		if (announcementsTab.dataset.announcementsInit === 'true') {
+			return;
+		}
+
+		renderAnnouncementsUI();
+		announcementsTab.dataset.announcementsInit = 'true';
+	}
+
+	function renderAnnouncementsUI() {
+		if (!announcementsTab) {
+			return;
+		}
+
+		const serverOptions = Array.isArray(serversCache) && serversCache.length > 0
+			? serversCache.map(s => `<option value="${Number(s.id) || 0}">${escapeHtml(s.display_name || s.displayName || 'Server')}</option>`).join('')
+			: '';
+
+		announcementsTab.innerHTML = `
+			<div class="announce-form-wrapper">
+				<form id="announcement-form" class="announce-form">
+					<div class="form-group">
+						<label for="announcement-message">Message</label>
+						<textarea id="announcement-message" class="form-input" rows="3" placeholder="Type announcement message..." required></textarea>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="announcement-severity">Severity</label>
+							<select id="announcement-severity" class="form-input">
+								<option value="info">Info</option>
+								<option value="success">Success</option>
+								<option value="warning">Warning</option>
+								<option value="error">Error</option>
+							</select>
+						</div>
+						<div class="form-group">
+							<label for="announcement-server">Target Server</label>
+							<select id="announcement-server" class="form-input">
+								<option value="">All Servers</option>
+								${serverOptions}
+							</select>
+						</div>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="announcement-start">Starts At (optional)</label>
+							<input type="datetime-local" id="announcement-start" class="form-input" />
+						</div>
+						<div class="form-group">
+							<label for="announcement-end">Ends At (optional)</label>
+							<input type="datetime-local" id="announcement-end" class="form-input" />
+						</div>
+					</div>
+
+					<p class="form-error" id="announcement-error" role="alert" aria-live="assertive"></p>
+
+					<div class="form-actions">
+						<button type="submit" class="btn-primary">Send Announcement</button>
+					</div>
+				</form>
+			</div>
+
+			<div class="announce-list-wrapper">
+				<h3 style="margin-top: 24px;">Existing Announcements</h3>
+				<div id="announcements-list"></div>
+			</div>
+		`;
+
+		const form = announcementsTab.querySelector('#announcement-form');
+		if (form) {
+			form.addEventListener('submit', async (e) => {
+				e.preventDefault();
+
+				const messageEl = announcementsTab.querySelector('#announcement-message');
+				const severityEl = announcementsTab.querySelector('#announcement-severity');
+				const serverEl = announcementsTab.querySelector('#announcement-server');
+				const startEl = announcementsTab.querySelector('#announcement-start');
+				const endEl = announcementsTab.querySelector('#announcement-end');
+
+				const payload = {
+					message: (messageEl?.value || '').trim(),
+					severity: (severityEl?.value || 'info'),
+					serverId: (serverEl?.value || '') === '' ? null : Number(serverEl.value),
+					startsAt: startEl?.value || '',
+					endsAt: endEl?.value || '',
+					isActive: 1
+				};
+
+				if (!payload.message) {
+					return setAnnouncementError('Message is required.');
+				}
+
+				setAnnouncementError('');
+				setAnnouncementFormSubmitting(true);
+				try {
+					await addAnnouncement(payload);
+					// Reset form and reload list
+					form.reset();
+					await loadAnnouncementsManagement();
+				} catch (err) {
+					console.error('Failed to save announcement:', err);
+					setAnnouncementError(err?.message || 'Unable to save announcement.');
+				} finally {
+					setAnnouncementFormSubmitting(false);
+				}
+			});
+		}
+	}
+
+	function setAnnouncementFormSubmitting(isSubmitting) {
+		if (!announcementsTab) return;
+		const form = announcementsTab.querySelector('#announcement-form');
+		if (!form) return;
+		form.querySelectorAll('input, textarea, select, button').forEach(el => {
+			el.disabled = isSubmitting;
+		});
+	}
+
+	function setAnnouncementError(message) {
+		if (!announcementsTab) return;
+		const el = announcementsTab.querySelector('#announcement-error');
+		if (!el) return;
+		el.textContent = message || '';
+		el.classList.toggle('active', Boolean(message));
+	}
+
+	async function loadAnnouncementsManagement() {
+		if (!announcementsTab) return;
+		const listContainer = announcementsTab.querySelector('#announcements-list');
+		if (!listContainer) return;
+
+		listContainer.innerHTML = '<p style="color: #cccccc;">Loading announcements...</p>';
+
+		try {
+			const response = await fetch(API_ENDPOINTS.listAnnouncements + '?active=0', {
+				headers: { 'Accept': 'application/json' },
+				cache: 'no-store'
+			});
+			if (!response.ok) {
+				throw new Error(`Request failed with status ${response.status}`);
+			}
+			const data = await response.json();
+			renderAnnouncementsList(Array.isArray(data) ? data : []);
+		} catch (error) {
+			console.error('Failed to load announcements:', error);
+			listContainer.innerHTML = '<p style="color: #ff6b6b;">Unable to load announcements.</p>';
+		}
+	}
+
+	function renderAnnouncementsList(announcements) {
+		if (!announcementsTab) return;
+		const listContainer = announcementsTab.querySelector('#announcements-list');
+		if (!listContainer) return;
+
+		if (!Array.isArray(announcements) || announcements.length === 0) {
+			listContainer.innerHTML = '<p style="color: #cccccc;">No announcements yet.</p>';
+			return;
+		}
+
+		let html = '<div class="announcements-list">';
+		announcements.forEach(a => {
+			const id = Number(a.id) || 0;
+			const serverName = escapeHtml(a.server_name || 'All Servers');
+			const severity = escapeHtml(a.severity || 'info');
+			const msg = escapeHtml(a.message || '');
+			const starts = a.starts_at ? escapeHtml(a.starts_at) : 'Immediate';
+			const ends = a.ends_at ? escapeHtml(a.ends_at) : 'Open-ended';
+			const active = Number(a.is_active) === 1 ? 'Active' : 'Inactive';
+
+			html += `
+				<div class="announcement-card">
+					<div class="announcement-main">
+						<div class="announcement-header">
+							<span class="badge badge-${severity}">${severity.toUpperCase()}</span>
+							<span class="announcement-target">${serverName}</span>
+							<span class="announcement-status">${active}</span>
+						</div>
+						<p class="announcement-message">${msg}</p>
+						<div class="announcement-schedule">
+							<span><strong>Starts:</strong> ${starts}</span>
+							<span><strong>Ends:</strong> ${ends}</span>
+						</div>
+					</div>
+					<div class="announcement-actions">
+						<button class="btn-danger delete-announcement" data-id="${id}">Delete</button>
+					</div>
+				</div>
+			`;
+		});
+		html += '</div>';
+
+		listContainer.innerHTML = html;
+
+		listContainer.querySelectorAll('.delete-announcement').forEach(btn => {
+			btn.addEventListener('click', async () => {
+				const id = parseInt(btn.getAttribute('data-id'), 10);
+				if (Number.isNaN(id)) return;
+				const confirmed = window.confirm('Delete this announcement?');
+				if (!confirmed) return;
+				try {
+					await deleteAnnouncement(id);
+					await loadAnnouncementsManagement();
+				} catch (err) {
+					console.error('Failed to delete announcement:', err);
+					alert(err?.message || 'Unable to delete announcement.');
+				}
+			});
+		});
+	}
+
+	async function addAnnouncement(payload) {
+		const response = await fetch(API_ENDPOINTS.addAnnouncement, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+			body: JSON.stringify(payload)
+		});
+		const result = await response.json().catch(() => ({}));
+		if (!response.ok || !result.success) {
+			throw new Error(result.message || 'Failed to save announcement.');
+		}
+		return result.announcement || null;
+	}
+
+	async function deleteAnnouncement(id) {
+		const response = await fetch(API_ENDPOINTS.deleteAnnouncement, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+			body: JSON.stringify({ id })
+		});
+		const result = await response.json().catch(() => ({}));
+		if (!response.ok || !result.success) {
+			throw new Error(result.message || 'Failed to delete announcement.');
+		}
+		return true;
+	}
 
     function escapeHtml(value = '') {
         return String(value)

@@ -1,6 +1,6 @@
 (() => {
     const STATUS_ONLINE = 'online';
-    const API_PROXY_URL = 'Api/php/battlemetrics.php';
+    const API_PROXY_URL = 'Api/battlemetrics.php';
 
     function escapeHtml(value = '') {
         return String(value)
