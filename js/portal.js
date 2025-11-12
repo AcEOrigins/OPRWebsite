@@ -31,22 +31,50 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 	// Enforce authentication and apply role-based visibility
 	try {
-		const authRes = await fetch(API_ENDPOINTS.authCheck, { credentials: 'same-origin', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-		if (!authRes.ok) throw new Error(`HTTP ${authRes.status}`);
-		const auth = await authRes.json();
-		if (!auth || auth.authenticated !== true) {
-			window.location.href = 'portal_login.html';
+		const authRes = await fetch(API_ENDPOINTS.authCheck, { 
+			credentials: 'same-origin', 
+			headers: { 'Accept': 'application/json' }, 
+			cache: 'no-store' 
+		});
+		
+		if (!authRes.ok) {
+			// If auth endpoint doesn't exist or fails, redirect to login
+			window.location.replace('portal_login.html');
 			return;
 		}
+		
+		const contentType = authRes.headers.get('content-type') || '';
+		if (!contentType.includes('application/json')) {
+			// Not JSON response, redirect to login
+			window.location.replace('portal_login.html');
+			return;
+		}
+		
+		const auth = await authRes.json();
+		if (!auth || auth.authenticated !== true) {
+			// Not authenticated, redirect to login
+			window.location.replace('portal_login.html');
+			return;
+		}
+		
+		// Authenticated - show portal
 		currentUser = auth;
 		applyRoleVisibility(auth);
 		insertWelcome(auth);
+		
+		// Hide loading screen
+		const loadingScreen = document.getElementById('auth-loading');
+		if (loadingScreen) {
+			loadingScreen.style.display = 'none';
+		}
+		
 		if (portalRoot) {
-			portalRoot.style.display = ''; // reveal UI only after auth
+			portalRoot.style.display = '';
 		}
 	} catch (e) {
-		// If auth check fails, send to login
-		window.location.href = 'portal_login.html';
+		// Any error - redirect to login
+		console.error('Auth check failed:', e);
+		window.location.replace('portal_login.html');
 		return;
 	}
 
