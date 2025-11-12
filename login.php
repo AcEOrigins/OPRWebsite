@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+// Configure session settings for better security and compatibility
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.use_strict_mode', '1');
+
 session_start();
 
 header('Content-Type: application/json');

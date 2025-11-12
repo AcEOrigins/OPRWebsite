@@ -114,13 +114,21 @@
             const response = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ name, password }),
                 credentials: 'same-origin'
             });
 
-            const result = await response.json().catch(() => ({}));
+            let result;
+            try {
+                result = await response.json();
+            } catch (parseError) {
+                console.error('Failed to parse response:', parseError);
+                showError('Server returned an invalid response. Please try again.');
+                return;
+            }
 
             if (!response.ok || !result.success) {
                 const message = result.message || 'Invalid credentials. Please try again.';
@@ -148,11 +156,41 @@
         }
     }
 
+    async function checkIfAlreadyLoggedIn() {
+        try {
+            const response = await fetch('auth_check.php', {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            });
+            
+            if (response.ok) {
+                const result = await response.json().catch(() => ({}));
+                if (result && result.authenticated === true) {
+                    // Already logged in, redirect to portal
+                    window.location.replace(REDIRECT_URL);
+                    return true;
+                }
+            }
+        } catch (e) {
+            // Ignore errors - user is not logged in
+            console.log('Not logged in, showing login form');
+        }
+        return false;
+    }
+
     function init() {
         const { usernameInput, passwordInput, loginForm } = getElements();
         if (!usernameInput || !passwordInput || !loginForm) {
             return;
         }
+
+        // Check if already logged in
+        checkIfAlreadyLoggedIn().then(isLoggedIn => {
+            if (isLoggedIn) {
+                return; // Will redirect
+            }
+        });
 
         usernameInput.addEventListener('input', () => {
             if (usernameInput.value.trim().length > 0) {

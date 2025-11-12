@@ -30,6 +30,11 @@ document.addEventListener('DOMContentLoaded', async function() {
 	let currentUser = null;
 
 	// Enforce authentication and apply role-based visibility
+	// Ensure portal content is hidden until auth is verified
+	if (portalRoot) {
+		portalRoot.style.display = 'none';
+	}
+	
 	try {
 		const authRes = await fetch(API_ENDPOINTS.authCheck, { 
 			credentials: 'same-origin', 
@@ -39,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 		
 		if (!authRes.ok) {
 			// If auth endpoint doesn't exist or fails, redirect to login
+			console.error('Auth check failed: HTTP', authRes.status);
 			window.location.replace('portal_login.html');
 			return;
 		}
@@ -46,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 		const contentType = authRes.headers.get('content-type') || '';
 		if (!contentType.includes('application/json')) {
 			// Not JSON response, redirect to login
+			console.error('Auth check failed: Invalid content type', contentType);
 			window.location.replace('portal_login.html');
 			return;
 		}
@@ -53,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 		const auth = await authRes.json();
 		if (!auth || auth.authenticated !== true) {
 			// Not authenticated, redirect to login
+			console.log('Not authenticated, redirecting to login');
 			window.location.replace('portal_login.html');
 			return;
 		}
