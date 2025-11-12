@@ -1,15 +1,21 @@
+# OPR Website .htaccess Configuration
+# For Hostinger and shared hosting: This file relies on mod_rewrite (required).
+# If site breaks after upload: disable this file via cPanel and contact support to enable mod_rewrite.
+# See: README.md under "Apache Configuration" for troubleshooting.
+
 RewriteEngine On
 
-# 1. Force HTTPS
+# 1. Force HTTPS (without redoubling in target)
 RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-# 2. Trailing slash handling (keeps asset URLs intact)
+# 2. Trailing slash handling (keeps asset URLs intact, fixes infinite loop)
 RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_URI} !(.*)/$
-RewriteRule ^(.+)$ https://%{HTTP_HOST}/$1/ [L,R=301]
+RewriteRule ^(.+)$ $1/ [L,R=301]
 
-# 3. Security headers
+# 3. Security headers (gracefully skip if mod_headers unavailable)
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
     Header set X-Frame-Options "DENY"
@@ -24,7 +30,13 @@ Options -Indexes
 
 # 5. Prevent access to sensitive files
 <FilesMatch "(^\.|\.env|\.json|composer\.(lock|json))">
-    Require all denied
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
 # 6. Compression
