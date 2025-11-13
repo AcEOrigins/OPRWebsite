@@ -31,8 +31,11 @@
 declare(strict_types=1);
 
 // ─────────────────────────────────────────────────────────────────────────────────
-// SECTION 1: ERROR HANDLING
+// SECTION 1: ERROR HANDLING AND OUTPUT BUFFERING
 // ─────────────────────────────────────────────────────────────────────────────────
+
+// Start output buffering to prevent any accidental output from breaking JSON
+ob_start();
 
 // Set error reporting for debugging (remove in production)
 error_reporting(E_ALL);
@@ -94,6 +97,9 @@ try {
 // ─────────────────────────────────────────────────────────────────────────────────
 
 if ($result['success']) {
+    // Clear any buffered output
+    ob_clean();
+    
     // Return redirectUrl at top level (not in data) for backward compatibility
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
@@ -101,8 +107,11 @@ if ($result['success']) {
         'success' => true,
         'redirectUrl' => 'portal.html'
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    ob_end_flush();
     exit;
 } else {
+    // Clear any buffered output before sending error
+    ob_clean();
     ApiResponse::error($result['message'] ?? 'Invalid credentials. Please try again.', 401);
 }
 

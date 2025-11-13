@@ -173,8 +173,19 @@ class ApiResponse
      */
     private static function sendJson(array $data): void
     {
+        // Clear any buffered output to ensure clean JSON response
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+        
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+        // Flush output buffer if it exists
+        if (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        
         exit;
     }
 }
