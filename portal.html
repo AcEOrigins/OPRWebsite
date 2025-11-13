@@ -71,18 +71,33 @@
             <div class="tab-content active" id="manage-content">
                 <!-- Sub-tab contents for Manage Site -->
                 <div class="sub-tab-content active" data-sub-tab="slideshow">
+                    <div class="manage-section">
+                        <h3>Slideshow</h3>
+                        <p class="section-description">Manage the homepage slideshow images and content.</p>
+                        <button class="btn-primary" type="button" id="manage-slideshow-btn">Manage Slideshow</button>
+                    </div>
                 </div>
                 <div class="sub-tab-content" data-sub-tab="server-info">
-                    <div id="portal-battlemetrics-grid" class="bm-grid"></div>
+                    <div class="manage-section">
+                        <h3>Server Info</h3>
+                        <p class="section-description">Configure server information displayed on the website.</p>
+                        <button class="btn-primary" type="button" id="manage-server-info-btn">Manage Server Info</button>
+                        <div id="portal-battlemetrics-grid" class="bm-grid" style="margin-top: 2rem;"></div>
+                    </div>
                 </div>
                 <div class="sub-tab-content" data-sub-tab="our-servers">
-                </div>
-                <div class="sub-tab-content" data-sub-tab="footer">
-                </div>
-                <div class="sub-tab-content" data-sub-tab="navigation">
+                    <div class="manage-section">
+                        <h3>Our Servers</h3>
+                        <p class="section-description">Manage the servers displayed on the website.</p>
+                        <button class="btn-primary" type="button" id="manage-our-servers-btn">Manage Servers</button>
+                    </div>
                 </div>
 				<div class="sub-tab-content" data-sub-tab="server-announcements">
-					<p style="color: #cccccc;">Manage server announcements here.</p>
+					<div class="manage-section">
+                        <h3>Server Announcements</h3>
+                        <p class="section-description">Create and manage announcements for your servers.</p>
+                        <button class="btn-primary" type="button" id="manage-announcements-btn">Manage Announcements</button>
+                    </div>
 				</div>
             </div>
 
@@ -127,7 +142,7 @@
                                 <h3>Security Policies</h3>
                             </div>
                             <p>Document password rotation schedules, recovery contacts, and other access governance details for your team.</p>
-                            <button class="btn-secondary" type="button" disabled>Manage Policies</button>
+                            <button class="btn-secondary" type="button" id="manage-policies-btn">Manage Policies</button>
                         </div>
                     </div>
 
@@ -189,12 +204,281 @@
 						<label for="user-password">Password</label>
 						<input type="password" id="user-password" class="form-input" placeholder="Enter password" required>
 					</div>
+					<div class="form-group">
+						<label for="user-role">Role</label>
+						<select id="user-role" class="form-input" required>
+							<option value="">Select a role</option>
+							<option value="owner">Owner</option>
+							<option value="admin">Admin</option>
+							<option value="staff">Staff</option>
+						</select>
+					</div>
 					<p class="form-error" id="add-user-error" role="alert" aria-live="assertive"></p>
 					<div class="modal-actions">
 						<button type="button" class="btn-secondary" id="cancel-add-user">Cancel</button>
 						<button type="submit" class="btn-primary">Create User</button>
 					</div>
 				</form>
+			</div>
+		</div>
+	</div>
+
+	<!-- View Accounts Modal -->
+	<div class="modal-overlay" id="view-accounts-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Account Directory</h2>
+				<button class="modal-close" id="close-view-accounts-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<div id="accounts-modal-content">
+					<p style="color: #cccccc; text-align: center;">Loading accounts...</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Manage Policies Modal -->
+	<div class="modal-overlay" id="manage-policies-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Security Policies</h2>
+				<button class="modal-close" id="close-manage-policies-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<form id="manage-policies-form">
+					<div class="form-group">
+						<label for="password-rotation-days">Password Rotation Schedule (days)</label>
+						<input type="number" id="password-rotation-days" class="form-input" placeholder="e.g., 90" min="1" value="90">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">How often users should change their passwords</small>
+					</div>
+
+					<div class="form-group">
+						<label for="min-password-length">Minimum Password Length</label>
+						<input type="number" id="min-password-length" class="form-input" placeholder="e.g., 8" min="6" value="8">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Minimum number of characters required</small>
+					</div>
+
+					<div class="form-group">
+						<label for="require-uppercase">Require Uppercase Letters</label>
+						<select id="require-uppercase" class="form-input">
+							<option value="1">Yes</option>
+							<option value="0">No</option>
+						</select>
+					</div>
+
+					<div class="form-group">
+						<label for="require-numbers">Require Numbers</label>
+						<select id="require-numbers" class="form-input">
+							<option value="1">Yes</option>
+							<option value="0">No</option>
+						</select>
+					</div>
+
+					<div class="form-group">
+						<label for="require-special-chars">Require Special Characters</label>
+						<select id="require-special-chars" class="form-input">
+							<option value="1">Yes</option>
+							<option value="0">No</option>
+						</select>
+					</div>
+
+					<div class="form-group">
+						<label for="recovery-contact-email">Recovery Contact Email</label>
+						<input type="email" id="recovery-contact-email" class="form-input" placeholder="admin@example.com">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Email for account recovery and security notifications</small>
+					</div>
+
+					<div class="form-group">
+						<label for="session-timeout-minutes">Session Timeout (minutes)</label>
+						<input type="number" id="session-timeout-minutes" class="form-input" placeholder="e.g., 30" min="5" value="30">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Automatic logout after inactivity</small>
+					</div>
+
+					<div class="form-group">
+						<label for="max-login-attempts">Max Login Attempts</label>
+						<input type="number" id="max-login-attempts" class="form-input" placeholder="e.g., 5" min="3" value="5">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Number of failed attempts before account lockout</small>
+					</div>
+
+					<div class="form-group">
+						<label for="lockout-duration-minutes">Lockout Duration (minutes)</label>
+						<input type="number" id="lockout-duration-minutes" class="form-input" placeholder="e.g., 15" min="1" value="15">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">How long accounts remain locked after max attempts</small>
+					</div>
+
+					<div class="form-group">
+						<label for="policy-notes">Additional Notes</label>
+						<textarea id="policy-notes" class="form-input" placeholder="Any additional security policies or notes..." rows="4"></textarea>
+					</div>
+
+					<p class="form-error" id="manage-policies-error" role="alert" aria-live="assertive"></p>
+					<div class="modal-actions">
+						<button type="button" class="btn-secondary" id="cancel-manage-policies">Cancel</button>
+						<button type="submit" class="btn-primary">Save Policies</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<!-- Manage Slideshow Modal -->
+	<div class="modal-overlay" id="manage-slideshow-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Manage Slideshow</h2>
+				<button class="modal-close" id="close-manage-slideshow-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<form id="manage-slideshow-form">
+					<div class="form-group">
+						<label for="slideshow-title">Slideshow Title</label>
+						<input type="text" id="slideshow-title" class="form-input" placeholder="Enter slideshow title">
+					</div>
+
+					<div class="form-group">
+						<label for="slideshow-description">Description</label>
+						<textarea id="slideshow-description" class="form-input" placeholder="Enter slideshow description" rows="3"></textarea>
+					</div>
+
+					<div class="form-group">
+						<label for="slideshow-image-url">Image URL</label>
+						<input type="url" id="slideshow-image-url" class="form-input" placeholder="https://example.com/image.jpg">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">URL of the slideshow image</small>
+					</div>
+
+					<div class="form-group">
+						<label for="slideshow-link-url">Link URL (Optional)</label>
+						<input type="url" id="slideshow-link-url" class="form-input" placeholder="https://example.com">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">URL to navigate to when clicking the slide</small>
+					</div>
+
+					<div class="form-group">
+						<label for="slideshow-order">Display Order</label>
+						<input type="number" id="slideshow-order" class="form-input" placeholder="1" min="1" value="1">
+						<small style="color: #888; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Lower numbers appear first</small>
+					</div>
+
+					<div class="form-group">
+						<label for="slideshow-active">Active</label>
+						<select id="slideshow-active" class="form-input">
+							<option value="1">Yes</option>
+							<option value="0">No</option>
+						</select>
+					</div>
+
+					<p class="form-error" id="manage-slideshow-error" role="alert" aria-live="assertive"></p>
+					<div class="modal-actions">
+						<button type="button" class="btn-secondary" id="cancel-manage-slideshow">Cancel</button>
+						<button type="submit" class="btn-primary">Save Slide</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<!-- Manage Server Info Modal -->
+	<div class="modal-overlay" id="manage-server-info-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Manage Server Info</h2>
+				<button class="modal-close" id="close-manage-server-info-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<form id="manage-server-info-form">
+					<div class="form-group">
+						<label for="server-info-title">Server Title</label>
+						<input type="text" id="server-info-title" class="form-input" placeholder="Enter server title">
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-description">Description</label>
+						<textarea id="server-info-description" class="form-input" placeholder="Enter server description" rows="4"></textarea>
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-ip">Server IP Address</label>
+						<input type="text" id="server-info-ip" class="form-input" placeholder="192.168.1.1">
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-port">Server Port</label>
+						<input type="number" id="server-info-port" class="form-input" placeholder="28015" min="1" max="65535">
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-map">Map Name</label>
+						<input type="text" id="server-info-map" class="form-input" placeholder="e.g., Procedural Map">
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-wipe-schedule">Wipe Schedule</label>
+						<input type="text" id="server-info-wipe-schedule" class="form-input" placeholder="e.g., Every Thursday">
+					</div>
+
+					<div class="form-group">
+						<label for="server-info-rules">Server Rules</label>
+						<textarea id="server-info-rules" class="form-input" placeholder="Enter server rules..." rows="6"></textarea>
+					</div>
+
+					<p class="form-error" id="manage-server-info-error" role="alert" aria-live="assertive"></p>
+					<div class="modal-actions">
+						<button type="button" class="btn-secondary" id="cancel-manage-server-info">Cancel</button>
+						<button type="submit" class="btn-primary">Save Server Info</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<!-- Manage Our Servers Modal -->
+	<div class="modal-overlay" id="manage-our-servers-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Manage Our Servers</h2>
+				<button class="modal-close" id="close-manage-our-servers-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<div id="our-servers-list">
+					<p style="color: #cccccc; text-align: center;">Loading servers...</p>
+				</div>
+				<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+					<button class="btn-primary" type="button" id="add-new-server-btn" style="width: 100%;">
+						<i class="fas fa-plus"></i> Add New Server
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Manage Announcements Modal -->
+	<div class="modal-overlay" id="manage-announcements-modal">
+		<div class="modal-content modal-large">
+			<div class="modal-header">
+				<h2>Manage Server Announcements</h2>
+				<button class="modal-close" id="close-manage-announcements-modal">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body">
+				<div id="announcements-list-content">
+					<p style="color: #cccccc; text-align: center;">Loading announcements...</p>
+				</div>
+				<div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+					<button class="btn-primary" type="button" id="add-new-announcement-btn" style="width: 100%;">
+						<i class="fas fa-plus"></i> Add New Announcement
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>

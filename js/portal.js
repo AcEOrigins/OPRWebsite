@@ -73,9 +73,9 @@ const API = {
     body: { id }
   }),
   listUsers: () => API.fetch(API.endpoints.listUsers),
-  addUser: (name, password) => API.fetch(API.endpoints.addUser, {
+  addUser: (name, password, role) => API.fetch(API.endpoints.addUser, {
     method: 'POST',
-    body: { name, password }
+    body: { name, password, role }
   }),
   deactivateUser: (id) => API.fetch(API.endpoints.deactivateUser, {
     method: 'POST',
@@ -228,8 +228,14 @@ const Auth = {
     if (!welcome) {
       welcome = document.createElement('div');
       welcome.className = 'welcome-text';
-      welcome.style.cssText = 'color: #b9c2d0; font-size: 0.85rem; margin-left: auto;';
-      navHeader.appendChild(welcome);
+      welcome.style.cssText = 'color: #b9c2d0; font-size: 0.85rem; width: 100%; margin-top: 0.5rem;';
+      // Insert welcome after the h2 "OPR Portal"
+      const h2 = navHeader.querySelector('h2');
+      if (h2) {
+        h2.insertAdjacentElement('afterend', welcome);
+      } else {
+        navHeader.appendChild(welcome);
+      }
     }
     welcome.textContent = `Welcome ${user.userName}`;
   }
@@ -266,8 +272,6 @@ const Nav = {
       { id: 'slideshow', label: 'Slideshow' },
       { id: 'server-info', label: 'Server Info' },
       { id: 'our-servers', label: 'Our Servers' },
-      { id: 'footer', label: 'Footer' },
-      { id: 'navigation', label: 'Navigation' },
       { id: 'server-announcements', label: 'Server Announcements' }
     ]);
 
@@ -387,10 +391,16 @@ const Nav = {
     if (subBtn) subBtn.classList.add('active');
 
     // Initialize sub-tab if needed
-    if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
+    if (mainTabId === 'manage-content' && subTabId === 'slideshow') {
+      ManageContent.initSlideshow();
+    } else if (mainTabId === 'manage-content' && subTabId === 'server-info') {
+      ManageContent.initServerInfo();
+    } else if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
       Managers.servers.init();
+      ManageContent.initOurServers();
     } else if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
       Managers.announcements.init();
+      ManageContent.initAnnouncements();
     }
   }
 };
@@ -841,22 +851,72 @@ const Managers = {
       this.tabEl.dataset.initialized = 'true';
       this.wireButtons();
       this.setupAddUserModal();
+      this.setupViewAccountsModal();
+      this.setupManagePoliciesModal();
       this.load();
     },
 
     wireButtons() {
       const viewBtn = this.tabEl?.querySelector('#view-accounts-btn');
       const addBtn = this.tabEl?.querySelector('#add-user-btn');
+      const policiesBtn = this.tabEl?.querySelector('#manage-policies-btn');
 
       if (viewBtn) {
-        viewBtn.addEventListener('click', () => {
-          this.tabEl?.querySelector('#accounts-section')?.scrollIntoView({ behavior: 'smooth' });
-          this.load();
-        });
+        viewBtn.addEventListener('click', () => this.openViewAccountsModal());
       }
 
       if (addBtn) {
         addBtn.addEventListener('click', () => this.openAddUserModal());
+      }
+
+      if (policiesBtn) {
+        policiesBtn.addEventListener('click', () => this.openManagePoliciesModal());
+      }
+    },
+
+    openViewAccountsModal() {
+      const modal = Utils.getElement('#view-accounts-modal');
+      if (!modal) return;
+      modal.classList.add('active');
+      this.loadModal();
+    },
+
+    setupViewAccountsModal() {
+      const modal = Utils.getElement('#view-accounts-modal');
+      const closeBtn = Utils.getElement('#close-view-accounts-modal');
+      
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => this.closeViewAccountsModal());
+      }
+      
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            this.closeViewAccountsModal();
+          }
+        });
+      }
+    },
+
+    closeViewAccountsModal() {
+      const modal = Utils.getElement('#view-accounts-modal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    },
+
+    async loadModal() {
+      const content = Utils.getElement('#accounts-modal-content');
+      if (!content) return;
+
+      content.innerHTML = '<p style="color: #cccccc; text-align: center;">Loading accounts...</p>';
+
+      try {
+        const data = await API.listUsers();
+        this.renderUsersModal(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load users:', error);
+        content.innerHTML = '<p style="color: #ff6b6b; text-align: center;">Unable to load users.</p>';
       }
     },
 
@@ -899,11 +959,18 @@ const Managers = {
     async handleAddUserSubmit() {
       const nameEl = Utils.getElement('#user-name');
       const passEl = Utils.getElement('#user-password');
+      const roleEl = Utils.getElement('#user-role');
       const name = nameEl?.value?.trim() || '';
       const password = passEl?.value || '';
+      const role = roleEl?.value?.trim() || '';
 
       if (!name || !password) {
         this.setAddUserError('Username and password are required.');
+        return;
+      }
+
+      if (!role) {
+        this.setAddUserError('Please select a role.');
         return;
       }
 
@@ -912,9 +979,9 @@ const Managers = {
       Utils.setLoading(btn, true);
 
       try {
-        await API.addUser(name, password);
+        await API.addUser(name, password, role);
         this.closeAddUserModal();
-        await this.load();
+        await this.loadModal();
       } catch (error) {
         console.error('Failed to add user:', error);
         this.setAddUserError(error.message);
@@ -968,7 +1035,44 @@ const Managers = {
       section.innerHTML = html;
 
       // Wire up action buttons
-      section.querySelectorAll('.reset-pass').forEach(btn => {
+      this.wireUserActions(section);
+    },
+
+    renderUsersModal(users) {
+      const content = Utils.getElement('#accounts-modal-content');
+      if (!content) return;
+
+      if (users.length === 0) {
+        content.innerHTML = '<p style="color: #cccccc; text-align: center;">No users found.</p>';
+        return;
+      }
+
+      let html = '<div class="users-list">';
+      users.forEach(u => {
+        const active = Number(u.is_active) === 1;
+        html += `
+          <div class="user-row">
+            <div class="user-main">
+              <strong>${Utils.escapeHtml(u.name || '')}</strong>
+              <span class="user-role">${Utils.escapeHtml(u.role || 'admin')}</span>
+              <span class="user-status">${active ? 'Active' : 'Inactive'}</span>
+            </div>
+            <div class="user-actions">
+              <button class="btn-secondary reset-pass" data-id="${u.id}">Reset Password</button>
+              ${active ? `<button class="btn-danger deactivate-user" data-id="${u.id}">Deactivate</button>` : `<button class="btn-primary reactivate-user" data-id="${u.id}">Reactivate</button>`}
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      content.innerHTML = html;
+
+      this.wireUserActions(content);
+    },
+
+    wireUserActions(container) {
+      // Wire up action buttons
+      container.querySelectorAll('.reset-pass').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = parseInt(btn.dataset.id, 10);
           const newPass = window.prompt('Enter new password:');
@@ -976,31 +1080,49 @@ const Managers = {
           try {
             await API.resetUserPassword(id, newPass);
             alert('Password updated.');
+            // Reload the modal content if in modal, otherwise reload section
+            const isModal = container.id === 'accounts-modal-content';
+            if (isModal) {
+              await this.loadModal();
+            } else {
+              await this.load();
+            }
           } catch (error) {
             alert(error.message);
           }
         });
       });
 
-      section.querySelectorAll('.deactivate-user').forEach(btn => {
+      container.querySelectorAll('.deactivate-user').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = parseInt(btn.dataset.id, 10);
           if (!window.confirm('Deactivate this user?')) return;
           try {
             await API.deactivateUser(id);
-            await this.load();
+            const isModal = container.id === 'accounts-modal-content';
+            if (isModal) {
+              await this.loadModal();
+            } else {
+              await this.load();
+            }
           } catch (error) {
             alert(error.message);
           }
         });
       });
 
-      section.querySelectorAll('.reactivate-user').forEach(btn => {
+      container.querySelectorAll('.reactivate-user').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = parseInt(btn.dataset.id, 10);
+          if (!window.confirm('Reactivate this user?')) return;
           try {
             await API.reactivateUser(id);
-            await this.load();
+            const isModal = container.id === 'accounts-modal-content';
+            if (isModal) {
+              await this.loadModal();
+            } else {
+              await this.load();
+            }
           } catch (error) {
             alert(error.message);
           }
@@ -1021,6 +1143,488 @@ const Managers = {
       if (el) {
         el.textContent = '';
         el.classList.remove('active');
+      }
+    },
+
+    openManagePoliciesModal() {
+      const modal = Utils.getElement('#manage-policies-modal');
+      if (!modal) return;
+      modal.classList.add('active');
+      this.loadPolicies();
+    },
+
+    closeManagePoliciesModal() {
+      const modal = Utils.getElement('#manage-policies-modal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    },
+
+    setupManagePoliciesModal() {
+      const modal = Utils.getElement('#manage-policies-modal');
+      const form = Utils.getElement('#manage-policies-form');
+      const closeBtn = Utils.getElement('#close-manage-policies-modal');
+      const cancelBtn = Utils.getElement('#cancel-manage-policies');
+
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => this.closeManagePoliciesModal());
+      }
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => this.closeManagePoliciesModal());
+      }
+
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            this.closeManagePoliciesModal();
+          }
+        });
+      }
+
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleManagePoliciesSubmit();
+        });
+      }
+    },
+
+    loadPolicies() {
+      // Load saved policies from localStorage (or could be from API in future)
+      const savedPolicies = JSON.parse(localStorage.getItem('securityPolicies') || '{}');
+      
+      const passwordRotationEl = Utils.getElement('#password-rotation-days');
+      const minPasswordLengthEl = Utils.getElement('#min-password-length');
+      const requireUppercaseEl = Utils.getElement('#require-uppercase');
+      const requireNumbersEl = Utils.getElement('#require-numbers');
+      const requireSpecialCharsEl = Utils.getElement('#require-special-chars');
+      const recoveryContactEmailEl = Utils.getElement('#recovery-contact-email');
+      const sessionTimeoutEl = Utils.getElement('#session-timeout-minutes');
+      const maxLoginAttemptsEl = Utils.getElement('#max-login-attempts');
+      const lockoutDurationEl = Utils.getElement('#lockout-duration-minutes');
+      const policyNotesEl = Utils.getElement('#policy-notes');
+
+      if (passwordRotationEl && savedPolicies.passwordRotationDays) {
+        passwordRotationEl.value = savedPolicies.passwordRotationDays;
+      }
+      if (minPasswordLengthEl && savedPolicies.minPasswordLength) {
+        minPasswordLengthEl.value = savedPolicies.minPasswordLength;
+      }
+      if (requireUppercaseEl && savedPolicies.requireUppercase !== undefined) {
+        requireUppercaseEl.value = savedPolicies.requireUppercase ? '1' : '0';
+      }
+      if (requireNumbersEl && savedPolicies.requireNumbers !== undefined) {
+        requireNumbersEl.value = savedPolicies.requireNumbers ? '1' : '0';
+      }
+      if (requireSpecialCharsEl && savedPolicies.requireSpecialChars !== undefined) {
+        requireSpecialCharsEl.value = savedPolicies.requireSpecialChars ? '1' : '0';
+      }
+      if (recoveryContactEmailEl && savedPolicies.recoveryContactEmail) {
+        recoveryContactEmailEl.value = savedPolicies.recoveryContactEmail;
+      }
+      if (sessionTimeoutEl && savedPolicies.sessionTimeoutMinutes) {
+        sessionTimeoutEl.value = savedPolicies.sessionTimeoutMinutes;
+      }
+      if (maxLoginAttemptsEl && savedPolicies.maxLoginAttempts) {
+        maxLoginAttemptsEl.value = savedPolicies.maxLoginAttempts;
+      }
+      if (lockoutDurationEl && savedPolicies.lockoutDurationMinutes) {
+        lockoutDurationEl.value = savedPolicies.lockoutDurationMinutes;
+      }
+      if (policyNotesEl && savedPolicies.policyNotes) {
+        policyNotesEl.value = savedPolicies.policyNotes;
+      }
+    },
+
+    async handleManagePoliciesSubmit() {
+      const passwordRotationEl = Utils.getElement('#password-rotation-days');
+      const minPasswordLengthEl = Utils.getElement('#min-password-length');
+      const requireUppercaseEl = Utils.getElement('#require-uppercase');
+      const requireNumbersEl = Utils.getElement('#require-numbers');
+      const requireSpecialCharsEl = Utils.getElement('#require-special-chars');
+      const recoveryContactEmailEl = Utils.getElement('#recovery-contact-email');
+      const sessionTimeoutEl = Utils.getElement('#session-timeout-minutes');
+      const maxLoginAttemptsEl = Utils.getElement('#max-login-attempts');
+      const lockoutDurationEl = Utils.getElement('#lockout-duration-minutes');
+      const policyNotesEl = Utils.getElement('#policy-notes');
+
+      const policies = {
+        passwordRotationDays: parseInt(passwordRotationEl?.value || '90', 10),
+        minPasswordLength: parseInt(minPasswordLengthEl?.value || '8', 10),
+        requireUppercase: requireUppercaseEl?.value === '1',
+        requireNumbers: requireNumbersEl?.value === '1',
+        requireSpecialChars: requireSpecialCharsEl?.value === '1',
+        recoveryContactEmail: recoveryContactEmailEl?.value?.trim() || '',
+        sessionTimeoutMinutes: parseInt(sessionTimeoutEl?.value || '30', 10),
+        maxLoginAttempts: parseInt(maxLoginAttemptsEl?.value || '5', 10),
+        lockoutDurationMinutes: parseInt(lockoutDurationEl?.value || '15', 10),
+        policyNotes: policyNotesEl?.value?.trim() || ''
+      };
+
+      this.clearManagePoliciesError();
+      const btn = Utils.getElement('#manage-policies-form button[type="submit"]');
+      Utils.setLoading(btn, true);
+
+      try {
+        // Save to localStorage (in future, could save to API)
+        localStorage.setItem('securityPolicies', JSON.stringify(policies));
+        
+        // Show success message
+        alert('Security policies saved successfully!');
+        this.closeManagePoliciesModal();
+      } catch (error) {
+        console.error('Failed to save policies:', error);
+        this.setManagePoliciesError('Failed to save policies. Please try again.');
+      } finally {
+        Utils.setLoading(btn, false);
+      }
+    },
+
+    setManagePoliciesError(msg) {
+      const el = Utils.getElement('#manage-policies-error');
+      if (el) {
+        el.textContent = msg;
+        el.style.display = msg ? 'block' : 'none';
+      }
+    },
+
+    clearManagePoliciesError() {
+      this.setManagePoliciesError('');
+    }
+  },
+
+  ManageContent: {
+    initSlideshow() {
+      const btn = Utils.getElement('#manage-slideshow-btn');
+      if (btn) {
+        btn.addEventListener('click', () => this.openSlideshowModal());
+      }
+      this.setupSlideshowModal();
+    },
+
+    initServerInfo() {
+      const btn = Utils.getElement('#manage-server-info-btn');
+      if (btn) {
+        btn.addEventListener('click', () => this.openServerInfoModal());
+      }
+      this.setupServerInfoModal();
+    },
+
+    initOurServers() {
+      const btn = Utils.getElement('#manage-our-servers-btn');
+      if (btn) {
+        btn.addEventListener('click', () => this.openOurServersModal());
+      }
+      this.setupOurServersModal();
+    },
+
+    initAnnouncements() {
+      const btn = Utils.getElement('#manage-announcements-btn');
+      if (btn) {
+        btn.addEventListener('click', () => this.openAnnouncementsModal());
+      }
+      this.setupAnnouncementsModal();
+    },
+
+    setupAddAnnouncementButton() {
+      const addBtn = Utils.getElement('#add-new-announcement-btn');
+      if (addBtn) {
+        // Remove any existing listeners by cloning and replacing
+        const newBtn = addBtn.cloneNode(true);
+        addBtn.parentNode.replaceChild(newBtn, addBtn);
+        
+        newBtn.addEventListener('click', () => {
+          this.closeAnnouncementsModal();
+          const addAnnouncementModal = Utils.getElement('#add-announcement-modal');
+          if (addAnnouncementModal) {
+            addAnnouncementModal.classList.add('active');
+            // Populate server select if needed
+            const serverSelect = Utils.getElement('#announcement-server');
+            if (serverSelect && serverSelect.options.length <= 1) {
+              serverSelect.innerHTML = '<option value="">All Servers</option>';
+              State.servers.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = Utils.escapeHtml(s.display_name || 'Server');
+                serverSelect.appendChild(opt);
+              });
+            }
+          }
+        });
+      }
+    },
+
+    // Slideshow Modal
+    openSlideshowModal() {
+      const modal = Utils.getElement('#manage-slideshow-modal');
+      if (modal) modal.classList.add('active');
+    },
+
+    closeSlideshowModal() {
+      const modal = Utils.getElement('#manage-slideshow-modal');
+      if (modal) modal.classList.remove('active');
+    },
+
+    setupSlideshowModal() {
+      const modal = Utils.getElement('#manage-slideshow-modal');
+      const form = Utils.getElement('#manage-slideshow-form');
+      const closeBtn = Utils.getElement('#close-manage-slideshow-modal');
+      const cancelBtn = Utils.getElement('#cancel-manage-slideshow');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeSlideshowModal());
+      if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeSlideshowModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeSlideshowModal();
+        });
+      }
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleSlideshowSubmit();
+        });
+      }
+    },
+
+    async handleSlideshowSubmit() {
+      const data = {
+        title: Utils.getElement('#slideshow-title')?.value?.trim() || '',
+        description: Utils.getElement('#slideshow-description')?.value?.trim() || '',
+        imageUrl: Utils.getElement('#slideshow-image-url')?.value?.trim() || '',
+        linkUrl: Utils.getElement('#slideshow-link-url')?.value?.trim() || '',
+        order: parseInt(Utils.getElement('#slideshow-order')?.value || '1', 10),
+        active: Utils.getElement('#slideshow-active')?.value === '1'
+      };
+
+      try {
+        localStorage.setItem('slideshowData', JSON.stringify(data));
+        alert('Slideshow saved successfully!');
+        this.closeSlideshowModal();
+      } catch (error) {
+        console.error('Failed to save slideshow:', error);
+        alert('Failed to save slideshow. Please try again.');
+      }
+    },
+
+    // Server Info Modal
+    openServerInfoModal() {
+      const modal = Utils.getElement('#manage-server-info-modal');
+      if (modal) modal.classList.add('active');
+      this.loadServerInfo();
+    },
+
+    closeServerInfoModal() {
+      const modal = Utils.getElement('#manage-server-info-modal');
+      if (modal) modal.classList.remove('active');
+    },
+
+    setupServerInfoModal() {
+      const modal = Utils.getElement('#manage-server-info-modal');
+      const form = Utils.getElement('#manage-server-info-form');
+      const closeBtn = Utils.getElement('#close-manage-server-info-modal');
+      const cancelBtn = Utils.getElement('#cancel-manage-server-info');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeServerInfoModal());
+      if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeServerInfoModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeServerInfoModal();
+        });
+      }
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await this.handleServerInfoSubmit();
+        });
+      }
+    },
+
+    loadServerInfo() {
+      const saved = JSON.parse(localStorage.getItem('serverInfoData') || '{}');
+      if (saved.title) Utils.getElement('#server-info-title').value = saved.title;
+      if (saved.description) Utils.getElement('#server-info-description').value = saved.description;
+      if (saved.ip) Utils.getElement('#server-info-ip').value = saved.ip;
+      if (saved.port) Utils.getElement('#server-info-port').value = saved.port;
+      if (saved.map) Utils.getElement('#server-info-map').value = saved.map;
+      if (saved.wipeSchedule) Utils.getElement('#server-info-wipe-schedule').value = saved.wipeSchedule;
+      if (saved.rules) Utils.getElement('#server-info-rules').value = saved.rules;
+    },
+
+    async handleServerInfoSubmit() {
+      const data = {
+        title: Utils.getElement('#server-info-title')?.value?.trim() || '',
+        description: Utils.getElement('#server-info-description')?.value?.trim() || '',
+        ip: Utils.getElement('#server-info-ip')?.value?.trim() || '',
+        port: parseInt(Utils.getElement('#server-info-port')?.value || '0', 10),
+        map: Utils.getElement('#server-info-map')?.value?.trim() || '',
+        wipeSchedule: Utils.getElement('#server-info-wipe-schedule')?.value?.trim() || '',
+        rules: Utils.getElement('#server-info-rules')?.value?.trim() || ''
+      };
+
+      try {
+        localStorage.setItem('serverInfoData', JSON.stringify(data));
+        alert('Server info saved successfully!');
+        this.closeServerInfoModal();
+      } catch (error) {
+        console.error('Failed to save server info:', error);
+        alert('Failed to save server info. Please try again.');
+      }
+    },
+
+    // Our Servers Modal
+    openOurServersModal() {
+      const modal = Utils.getElement('#manage-our-servers-modal');
+      if (modal) {
+        modal.classList.add('active');
+        this.loadOurServersList();
+      }
+    },
+
+    closeOurServersModal() {
+      const modal = Utils.getElement('#manage-our-servers-modal');
+      if (modal) modal.classList.remove('active');
+    },
+
+    setupOurServersModal() {
+      const modal = Utils.getElement('#manage-our-servers-modal');
+      const closeBtn = Utils.getElement('#close-manage-our-servers-modal');
+      const addBtn = Utils.getElement('#add-new-server-btn');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeOurServersModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeOurServersModal();
+        });
+      }
+      if (addBtn) {
+        addBtn.addEventListener('click', () => {
+          this.closeOurServersModal();
+          const addServerModal = Utils.getElement('#add-server-modal');
+          if (addServerModal) addServerModal.classList.add('active');
+        });
+      }
+    },
+
+    async loadOurServersList() {
+      const container = Utils.getElement('#our-servers-list');
+      if (!container) return;
+
+      try {
+        const servers = await API.listServers();
+        if (servers.length === 0) {
+          container.innerHTML = '<p style="color: #cccccc; text-align: center;">No servers configured yet.</p>';
+          return;
+        }
+
+        let html = '<div class="users-list">';
+        servers.forEach(server => {
+          html += `
+            <div class="user-row">
+              <div class="user-main">
+                <strong>${Utils.escapeHtml(server.display_name || '')}</strong>
+                <span class="user-role">${Utils.escapeHtml(server.game_title || '')}</span>
+                <span class="user-status">${Utils.escapeHtml(server.region || '')}</span>
+              </div>
+              <div class="user-actions">
+                <button class="btn-danger delete-server" data-id="${server.id}">Delete</button>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.delete-server').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = parseInt(btn.dataset.id, 10);
+            if (!window.confirm('Delete this server?')) return;
+            try {
+              await API.deleteServer(id);
+              await this.loadOurServersList();
+            } catch (error) {
+              alert(error.message);
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Failed to load servers:', error);
+        container.innerHTML = '<p style="color: #ff6b6b; text-align: center;">Unable to load servers.</p>';
+      }
+    },
+
+    // Announcements Modal
+    openAnnouncementsModal() {
+      const modal = Utils.getElement('#manage-announcements-modal');
+      if (modal) {
+        modal.classList.add('active');
+        this.loadAnnouncementsList();
+        // Setup the add button (button exists in static HTML)
+        this.setupAddAnnouncementButton();
+      }
+    },
+
+    closeAnnouncementsModal() {
+      const modal = Utils.getElement('#manage-announcements-modal');
+      if (modal) modal.classList.remove('active');
+    },
+
+    setupAnnouncementsModal() {
+      const modal = Utils.getElement('#manage-announcements-modal');
+      const closeBtn = Utils.getElement('#close-manage-announcements-modal');
+
+      if (closeBtn) closeBtn.addEventListener('click', () => this.closeAnnouncementsModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) this.closeAnnouncementsModal();
+        });
+      }
+    },
+
+    async loadAnnouncementsList() {
+      const container = Utils.getElement('#announcements-list-content');
+      if (!container) return;
+
+      try {
+        const announcements = await API.listAnnouncements(0);
+        if (announcements.length === 0) {
+          container.innerHTML = '<p style="color: #cccccc; text-align: center;">No announcements yet.</p>';
+          return;
+        }
+
+        let html = '<div class="users-list">';
+        announcements.forEach(announcement => {
+          html += `
+            <div class="user-row">
+              <div class="user-main">
+                <strong>${Utils.escapeHtml(announcement.message || '')}</strong>
+                <span class="user-role">${Utils.escapeHtml(announcement.severity || 'info')}</span>
+                <span class="user-status">${Utils.escapeHtml(announcement.server_name || 'All Servers')}</span>
+              </div>
+              <div class="user-actions">
+                <button class="btn-danger delete-announcement" data-id="${announcement.id}">Delete</button>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.delete-announcement').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = parseInt(btn.dataset.id, 10);
+            if (!window.confirm('Delete this announcement?')) return;
+            try {
+              await API.deleteAnnouncement(id);
+              await this.loadAnnouncementsList();
+            } catch (error) {
+              alert(error.message);
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Failed to load announcements:', error);
+        container.innerHTML = '<p style="color: #ff6b6b; text-align: center;">Unable to load announcements.</p>';
       }
     }
   }

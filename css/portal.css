@@ -215,8 +215,9 @@ body {
     padding: 1.75rem 1.4rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
 }
 
 .nav-logo {
@@ -225,9 +226,17 @@ body {
     object-fit: contain;
 }
 
+.nav-header .nav-logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}
+
 .nav-header h2 {
     font-size: 1.2rem;
     color: #ffffff;
+    margin: 0;
 }
 
 .nav-menu {
@@ -1245,6 +1254,97 @@ select.form-input {
     transform: scale(0.96);
     opacity: 0;
     transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.modal-content.modal-large {
+    max-width: 800px;
+}
+
+/* Users List Styles */
+.users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: #0a0a0a;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: border-color 0.3s ease;
+}
+
+.user-row:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-main {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.user-main strong {
+    color: #ffffff;
+    font-size: 1rem;
+}
+
+.user-role {
+    padding: 0.25rem 0.75rem;
+    background-color: #2a2a2a;
+    color: #b9c2d0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    text-transform: capitalize;
+}
+
+.user-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.user-status:contains("Active") {
+    background-color: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+
+.user-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.user-actions button {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+/* Manage Section Styles */
+.manage-section {
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.manage-section h3 {
+    color: #ffffff;
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.section-description {
+    color: #b9c2d0;
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
 }
 
 .modal-overlay.active .modal-content {
