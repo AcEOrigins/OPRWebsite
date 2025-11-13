@@ -48,7 +48,7 @@ declare(strict_types=1);
 // SECTION 1: RESPONSE CONFIGURATION
 // ─────────────────────────────────────────────────────────────────────────────────
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 // ─────────────────────────────────────────────────────────────────────────────────
 // SECTION 2: LOAD DEPENDENCIES

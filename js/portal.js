@@ -234,7 +234,7 @@ const Auth = {
       if (h2) {
         h2.insertAdjacentElement('afterend', welcome);
       } else {
-        navHeader.appendChild(welcome);
+      navHeader.appendChild(welcome);
       }
     }
     welcome.textContent = `Welcome ${user.userName}`;
@@ -392,15 +392,15 @@ const Nav = {
 
     // Initialize sub-tab if needed
     if (mainTabId === 'manage-content' && subTabId === 'slideshow') {
-      ManageContent.initSlideshow();
+      Managers.ManageContent.initSlideshow();
     } else if (mainTabId === 'manage-content' && subTabId === 'server-info') {
-      ManageContent.initServerInfo();
+      Managers.ManageContent.initServerInfo();
     } else if (mainTabId === 'manage-content' && subTabId === 'our-servers') {
       Managers.servers.init();
-      ManageContent.initOurServers();
+      Managers.ManageContent.initOurServers();
     } else if (mainTabId === 'manage-content' && subTabId === 'server-announcements') {
       Managers.announcements.init();
-      ManageContent.initAnnouncements();
+      Managers.ManageContent.initAnnouncements();
     }
   }
 };
@@ -892,9 +892,17 @@ const Managers = {
       if (modal) {
         modal.addEventListener('click', (e) => {
           if (e.target === modal) {
+            e.stopPropagation();
             this.closeViewAccountsModal();
           }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
     },
 
@@ -931,8 +939,18 @@ const Managers = {
 
       if (modal) {
         modal.addEventListener('click', (e) => {
-          if (e.target === modal) this.closeAddUserModal();
+          if (e.target === modal) {
+            e.stopPropagation();
+            this.closeAddUserModal();
+          }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
 
       if (form) {
@@ -1103,7 +1121,7 @@ const Managers = {
             if (isModal) {
               await this.loadModal();
             } else {
-              await this.load();
+            await this.load();
             }
           } catch (error) {
             alert(error.message);
@@ -1121,7 +1139,7 @@ const Managers = {
             if (isModal) {
               await this.loadModal();
             } else {
-              await this.load();
+            await this.load();
             }
           } catch (error) {
             alert(error.message);
@@ -1177,9 +1195,17 @@ const Managers = {
       if (modal) {
         modal.addEventListener('click', (e) => {
           if (e.target === modal) {
+            e.stopPropagation();
             this.closeManagePoliciesModal();
           }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
 
       if (form) {
@@ -1358,12 +1384,20 @@ const Managers = {
     // Slideshow Modal
     openSlideshowModal() {
       const modal = Utils.getElement('#manage-slideshow-modal');
-      if (modal) modal.classList.add('active');
+      if (modal) {
+        modal.classList.add('active');
+        console.log('Slideshow modal opened');
+      } else {
+        console.error('Slideshow modal not found');
+      }
     },
 
     closeSlideshowModal() {
       const modal = Utils.getElement('#manage-slideshow-modal');
-      if (modal) modal.classList.remove('active');
+      if (modal) {
+        modal.classList.remove('active');
+        console.log('Slideshow modal closed');
+      }
     },
 
     setupSlideshowModal() {
@@ -1376,8 +1410,18 @@ const Managers = {
       if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeSlideshowModal());
       if (modal) {
         modal.addEventListener('click', (e) => {
-          if (e.target === modal) this.closeSlideshowModal();
+          if (e.target === modal) {
+            e.stopPropagation();
+            this.closeSlideshowModal();
+          }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
       if (form) {
         form.addEventListener('submit', async (e) => {
@@ -1410,8 +1454,13 @@ const Managers = {
     // Server Info Modal
     openServerInfoModal() {
       const modal = Utils.getElement('#manage-server-info-modal');
-      if (modal) modal.classList.add('active');
-      this.loadServerInfo();
+      if (modal) {
+        modal.classList.add('active');
+        console.log('Server info modal opened');
+        this.loadServerInfo();
+      } else {
+        console.error('Server info modal not found');
+      }
     },
 
     closeServerInfoModal() {
@@ -1429,8 +1478,18 @@ const Managers = {
       if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeServerInfoModal());
       if (modal) {
         modal.addEventListener('click', (e) => {
-          if (e.target === modal) this.closeServerInfoModal();
+          if (e.target === modal) {
+            e.stopPropagation();
+            this.closeServerInfoModal();
+          }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
       if (form) {
         form.addEventListener('submit', async (e) => {
@@ -1477,7 +1536,10 @@ const Managers = {
       const modal = Utils.getElement('#manage-our-servers-modal');
       if (modal) {
         modal.classList.add('active');
+        console.log('Our servers modal opened');
         this.loadOurServersList();
+      } else {
+        console.error('Our servers modal not found');
       }
     },
 
@@ -1494,8 +1556,18 @@ const Managers = {
       if (closeBtn) closeBtn.addEventListener('click', () => this.closeOurServersModal());
       if (modal) {
         modal.addEventListener('click', (e) => {
-          if (e.target === modal) this.closeOurServersModal();
+          if (e.target === modal) {
+            e.stopPropagation();
+            this.closeOurServersModal();
+          }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
       if (addBtn) {
         addBtn.addEventListener('click', () => {
@@ -1558,9 +1630,12 @@ const Managers = {
       const modal = Utils.getElement('#manage-announcements-modal');
       if (modal) {
         modal.classList.add('active');
+        console.log('Announcements modal opened');
         this.loadAnnouncementsList();
         // Setup the add button (button exists in static HTML)
         this.setupAddAnnouncementButton();
+      } else {
+        console.error('Announcements modal not found');
       }
     },
 
@@ -1576,8 +1651,18 @@ const Managers = {
       if (closeBtn) closeBtn.addEventListener('click', () => this.closeAnnouncementsModal());
       if (modal) {
         modal.addEventListener('click', (e) => {
-          if (e.target === modal) this.closeAnnouncementsModal();
+          if (e.target === modal) {
+            e.stopPropagation();
+            this.closeAnnouncementsModal();
+          }
         });
+        // Prevent clicks inside modal content from closing modal
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.addEventListener('click', (e) => {
+            e.stopPropagation();
+          });
+        }
       }
     },
 

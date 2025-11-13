@@ -1228,7 +1228,7 @@ select.form-input {
     height: 100%;
     background-color: rgba(0, 0, 0, 0.7);
     z-index: 9999;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     opacity: 0;
@@ -1238,6 +1238,7 @@ select.form-input {
 }
 
 .modal-overlay.active {
+    display: flex;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -1254,6 +1255,9 @@ select.form-input {
     transform: scale(0.96);
     opacity: 0;
     transition: transform 220ms ease, opacity 220ms ease;
+    position: relative;
+    z-index: 10000;
+    pointer-events: auto;
 }
 
 .modal-content.modal-large {
