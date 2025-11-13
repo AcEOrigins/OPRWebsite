@@ -60,7 +60,9 @@ $result = AuthController::checkAuth($conn);
 // SECTION 3: BUILD RESPONSE
 // ─────────────────────────────────────────────────────────────────────────────────
 
+// Return authenticated at top level (not in data) for backward compatibility
 $response = [
+    'success' => true,
     'authenticated' => $result['authenticated'],
 ];
 
@@ -74,7 +76,10 @@ if ($result['authenticated'] && $result['user']) {
 // SECTION 4: SEND RESPONSE
 // ─────────────────────────────────────────────────────────────────────────────────
 
-ApiResponse::success($response);
+http_response_code(200);
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+exit;
 
 ?>
 

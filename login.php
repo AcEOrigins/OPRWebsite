@@ -70,7 +70,14 @@ $result = AuthController::login($name, $password, $conn);
 // ─────────────────────────────────────────────────────────────────────────────────
 
 if ($result['success']) {
-    ApiResponse::success(['redirectUrl' => 'portal.html']);
+    // Return redirectUrl at top level (not in data) for backward compatibility
+    http_response_code(200);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => true,
+        'redirectUrl' => 'portal.html'
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 } else {
     ApiResponse::error($result['message'], 401);
 }
